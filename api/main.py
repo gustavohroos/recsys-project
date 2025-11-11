@@ -6,11 +6,19 @@ from pathlib import Path
 from typing import Any, Dict, Iterator, List, Sequence
 
 from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRouter
 
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "data.db"
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 api_router = APIRouter(prefix="/api")
 
 
