@@ -7,7 +7,7 @@ from typing import Any, Dict, Iterator, List, Sequence
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.routing import APIRouter
 
-DB_PATH = Path(__file__).resolve().parent / "data.db"
+DB_PATH = Path(__file__).resolve().parent.parent / "data" / "data.db"
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
