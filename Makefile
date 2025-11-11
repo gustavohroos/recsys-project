@@ -9,3 +9,7 @@ setup:
 .PHONY: run-api
 run-api: setup
 	source .venv/bin/activate && uvicorn api.main:app --reload
+
+.PHONY: create-db
+create-db: setup
+	source .venv/bin/activate && python data/create_db.py
