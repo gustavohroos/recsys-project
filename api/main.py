@@ -162,7 +162,7 @@ def list_recommendations(
         target_key = f"item_id#{item_id}"
         target_type = "item"
         target_id = item_id
-    else:  # pragma: no cover - defensive, should be unreachable
+    else:
         raise HTTPException(status_code=400, detail="Unable to resolve recommendation target")
 
     filters = ["target_key = ?"]
@@ -185,7 +185,7 @@ def list_recommendations(
     for row in rows:
         try:
             items = json.loads(row["items"])
-        except json.JSONDecodeError as exc:  # pragma: no cover - defensive guard
+        except json.JSONDecodeError as exc:
             raise HTTPException(status_code=500, detail="Stored recommendations are corrupted") from exc
         recommendations.append(
             {

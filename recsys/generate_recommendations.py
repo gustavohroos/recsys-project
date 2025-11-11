@@ -164,5 +164,5 @@ def main() -> None:
         print(f"Stored {count} recommendation rows for model '{model_name}'")
 
 
-if __name__ == "__main__":  # pragma: no cover - CLI entry point
+if __name__ == "__main__":
     main()
