@@ -1,44 +1,68 @@
+import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
-import type { Topic } from "../types/Topic";
+import {
+  getItemsByIds,
+  getRecommendationsByItem,
+  getRecommendationsByUser
+} from "../api/items";
 import UserCard from "../components/UserCard";
-import { motion, AnimatePresence } from "framer-motion";
+import type { Topic } from "../types/Topic";
+
+const randomUserId = Math.floor(Math.random() * 70) + 1001;
 
 export default function Home() {
-  const [topics, setTopics] = useState<Topic[]>([]);
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
 
-  useEffect(() => {
-    const mockedData: Topic[] = [
-      {
-        id: "1",
-        title: "Introdução a Redes Neurais",
-        description: "Conceitos básicos sobre redes neurais artificiais.",
-        image:
-          "https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?auto=format&fit=crop&w=300&q=80",
-        score: 0.95,
-      },
-      {
-        id: "2",
-        title: "Sistemas de Recomendação",
-        description: "CF, conteúdo, híbridos e métricas de avaliação.",
-        image:
-          "https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?auto=format&fit=crop&w=300&q=80",
-        score: 0.87,
-      },
-      {
-        id: "3",
-        title: "Transformers",
-        description: "Arquitetura, atenção, embeddings e aplicações.",
-        image:
-          "https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?auto=format&fit=crop&w=300&q=80",
-        score: 0.89,
-      },
-    ];
+  const [userRecommendations, setUserRecommendations] = useState<Topic[]>([]);
+  const [itemRecommendations, setItemRecommendations] = useState<Topic[]>([]);
 
-    setTimeout(() => {
-      setTopics(mockedData);
-    }, 400);
+  useEffect(() => {
+    (async () => {
+      try {
+        const recResponse = await getRecommendationsByUser(randomUserId);
+        const itemIds = recResponse.recommendations[0].items;
+        let items = await getItemsByIds(itemIds);
+        items = (Array.isArray(items) ? items : []).map((item: any) => ({
+          ...item,
+          image: `https://picsum.photos/200?random=${Math.random()}`,
+        }));
+
+        if (items.length > 0) {
+          setUserRecommendations(items as Topic[]);
+          setSelectedTopic((prev) => prev ?? (items[0] as Topic));
+        }
+      } catch (err) {
+        console.error("Failed to fetch items:", err);
+      }
+    })();
+
+    return () => {};
   }, []);
+
+  
+  useEffect(() => {
+    (async () => {
+      try {
+        const recResponse = await getRecommendationsByItem(selectedTopic!.id);
+        const itemIds = recResponse.recommendations[0].items;
+        let items = await getItemsByIds(itemIds);
+        
+        items = (Array.isArray(items) ? items : []).map((item: any) => ({
+          ...item,
+          image: `https://picsum.photos/200?random=${Math.random()}`,
+        }));
+
+        if (items.length > 0) {
+          setItemRecommendations(items as Topic[]);
+        }
+      } catch (err) {
+        console.error("Failed to fetch items:", err);
+      }
+    })();
+
+    return () => {};
+  }, [selectedTopic]);
+  
 
   return (
     <div className="w-full min-h-screen bg-gray-800 flex">
@@ -63,7 +87,7 @@ export default function Home() {
               </h1>
 
               <ul className="flex flex-col gap-3">
-                {topics.map((topic) => (
+                {userRecommendations.map((topic) => (
                   <li key={topic.id}>
                     <motion.button
                       whileHover={{
@@ -160,7 +184,7 @@ export default function Home() {
               transition={{ duration: 0.25 }}
               className="flex flex-col gap-3"
             >
-              {topics.map((related) => (
+              {itemRecommendations.map((related) => (
                 <li key={related.id}>
                   <motion.button
                     whileHover={{ scale: 1.02, backgroundColor: "#3a3a3a" }}
