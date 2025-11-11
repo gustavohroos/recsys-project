@@ -1,3 +1,6 @@
+run-front:
+	@cd recsys-front && npm i && npm run dev
+
 .PHONY: setup
 setup:
 	python3 -m venv .venv
