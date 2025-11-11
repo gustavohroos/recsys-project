@@ -100,6 +100,16 @@ def create_tables(conn: sqlite3.Connection) -> None:
             FOREIGN KEY (item_id) REFERENCES items(id)
         )
         """,
+        """
+        CREATE TABLE IF NOT EXISTS recommendations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            target_key TEXT NOT NULL,
+            model TEXT NOT NULL,
+            items TEXT NOT NULL,
+            generated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(target_key, model)
+        )
+        """,
     )
 
     for statement in statements:
