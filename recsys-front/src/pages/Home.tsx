@@ -3,18 +3,19 @@ import { useEffect, useState } from "react";
 import {
   getItemsByIds,
   getRecommendationsByItem,
-  getRecommendationsByUser
+  getRecommendationsByUser,
 } from "../api/items";
 import UserCard from "../components/UserCard";
 import type { Topic } from "../types/Topic";
+import LikeDislikeButton from "../components/LikeButton";
 
 const randomUserId = Math.floor(Math.random() * 70) + 1001;
 
 export default function Home() {
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
-
   const [userRecommendations, setUserRecommendations] = useState<Topic[]>([]);
   const [itemRecommendations, setItemRecommendations] = useState<Topic[]>([]);
+  const [userId, setUserId] = useState(1001);
 
   useEffect(() => {
     (async () => {
@@ -35,18 +36,17 @@ export default function Home() {
         console.error("Failed to fetch items:", err);
       }
     })();
+  }, [userId]);
 
-    return () => {};
-  }, []);
-
-  
   useEffect(() => {
+    if (!selectedTopic) return;
+
     (async () => {
       try {
-        const recResponse = await getRecommendationsByItem(selectedTopic!.id);
+        const recResponse = await getRecommendationsByItem(selectedTopic.id);
         const itemIds = recResponse.recommendations[0].items;
         let items = await getItemsByIds(itemIds);
-        
+
         items = (Array.isArray(items) ? items : []).map((item: any) => ({
           ...item,
           image: `https://picsum.photos/200?random=${Math.random()}`,
@@ -59,10 +59,7 @@ export default function Home() {
         console.error("Failed to fetch items:", err);
       }
     })();
-
-    return () => {};
   }, [selectedTopic]);
-  
 
   return (
     <div className="w-full min-h-screen bg-gray-800 flex">
@@ -73,6 +70,8 @@ export default function Home() {
           email="ulian@empresa.com"
           role="X"
           avatarUrl="https://i.pravatar.cc/150?img=65"
+          currentUserId={userId}
+          onUserChange={setUserId}
         />
       </div>
 
@@ -85,7 +84,6 @@ export default function Home() {
               <h1 className="text-xl font-semibold mb-4 text-gray-900">
                 Tópicos
               </h1>
-
               <ul className="flex flex-col gap-3">
                 {userRecommendations.map((topic) => (
                   <li key={topic.id}>
@@ -159,6 +157,8 @@ export default function Home() {
                       {selectedTopic.description}
                     </p>
 
+                    <LikeDislikeButton itemId={Number(selectedTopic.id)} />
+
                     <div className="mt-4 text-sm text-gray-600">
                       Score: <strong>{selectedTopic.score}</strong>
                     </div>
@@ -173,7 +173,6 @@ export default function Home() {
       {/* RELACIONADOS */}
       <div className="w-80 min-h-screen p-6 bg-gray-900 text-white">
         <h1 className="text-xl font-semibold mb-4">Relacionados</h1>
-
         <AnimatePresence>
           {selectedTopic ? (
             <motion.ul

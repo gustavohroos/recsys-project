@@ -53,6 +53,7 @@ export async function getRecommendationsByUser(
 
   return res.json();
 }
+
 export async function getRecommendationsByItem(
   itemId: string | number,
   limit: number = 10
@@ -67,3 +68,10 @@ export async function getRecommendationsByItem(
 
   return res.json();
 }
+
+// export async function getUserById(
+//   userId: string | number
+// ): Promise<Response> {
+
+//   return res.json();
+// }
