@@ -3,7 +3,8 @@ import type { Topic } from "../types/Topic";
 
 const API_BASE_URL = "http://127.0.0.1:8000/api";
 
-const model_name = "random";
+const users_model_name = "random";
+const itens_model_name = "item_similarity";
 
 // Users 1001 - 1070
 
@@ -26,6 +27,7 @@ export async function getItemById(id: string | number): Promise<Topic> {
 
   return res.json();
 }
+
 export async function getItemsByIds(ids: Array<number>): Promise<Topic[]> {
   const idsParam = ids.join(",");
   const res = await fetch(`${API_BASE_URL}/items?ids=${idsParam}`);
@@ -42,7 +44,7 @@ export async function getRecommendationsByUser(
   limit: number = 10
 ): Promise<RecommendationsResponse> {
   const res = await fetch(
-    `${API_BASE_URL}/recommendations?user_id=${userId}&model=${model_name}&limit=${limit}`
+    `${API_BASE_URL}/recommendations?user_id=${userId}&model=${users_model_name}&limit=${limit}`
   );
 
   if (!res.ok) {
@@ -57,7 +59,7 @@ export async function getRecommendationsByItem(
   limit: number = 10
 ): Promise<RecommendationsResponse> {
   const res = await fetch(
-    `${API_BASE_URL}/recommendations?item_id=${itemId}&model=${model_name}&limit=${limit}`
+    `${API_BASE_URL}/recommendations?item_id=${itemId}&model=${itens_model_name}&limit=${limit}`
   );
 
   if (!res.ok) {
@@ -66,3 +68,10 @@ export async function getRecommendationsByItem(
 
   return res.json();
 }
+
+// export async function getUserById(
+//   userId: string | number
+// ): Promise<Response> {
+
+//   return res.json();
+// }
