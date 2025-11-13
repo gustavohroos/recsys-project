@@ -36,6 +36,34 @@ def _fetch_all(conn: sqlite3.Connection, query: str, params: Sequence[Any] = ())
     return [dict(row) for row in cursor.fetchall()]
 
 
+def _normalize_scored_items(raw_items: Any, limit: int) -> List[Dict[str, Any]]:
+    if not isinstance(raw_items, list):
+        raise HTTPException(status_code=500, detail="Stored recommendations have invalid format")
+
+    normalized: List[Dict[str, Any]] = []
+    for entry in raw_items:
+        if isinstance(entry, dict):
+            item_id = entry.get("item_id")
+            if item_id is None:
+                continue
+            score = entry.get("score")
+            normalized.append(
+                {
+                    "item_id": int(item_id),
+                    "score": float(score) if score is not None else None,
+                }
+            )
+        elif isinstance(entry, (int, float)):
+            normalized.append({"item_id": int(entry), "score": None})
+        else:
+            continue
+
+        if len(normalized) >= limit:
+            break
+
+    return normalized
+
+
 @api_router.get("/items")
 def list_items(
     ids: str | None = Query(default=None, description="Comma-separated list of item ids"),
@@ -198,7 +226,7 @@ def list_recommendations(
         recommendations.append(
             {
                 "model": row["model"],
-                "items": items[:limit],
+                "items": _normalize_scored_items(items, limit),
                 "generated_at": row["generated_at"],
             }
         )

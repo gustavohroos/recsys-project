@@ -54,11 +54,11 @@ class RandomRecommender:
         rng = random.Random(seed)
         return cls(user_ids=user_ids, item_ids=item_ids, rng=rng)
 
-    def recommend(self, top_n: int = 10) -> Dict[str, List[int]]:
+    def recommend(self, top_n: int = 10) -> Dict[str, List[Dict[str, float]]]:
         if top_n < 1:
             raise ValueError("top_n must be at least 1")
 
-        recs: Dict[str, List[int]] = {}
+        recs: Dict[str, List[Dict[str, float]]] = {}
 
         item_pool: Sequence[int] = tuple(self.item_ids)
         n_items = len(item_pool)
@@ -66,7 +66,7 @@ class RandomRecommender:
 
         for user_id in self.user_ids:
             selected = self.rng.sample(item_pool, k=limit)
-            recs[f"user_id#{user_id}"] = list(selected)
+            recs[f"user_id#{user_id}"] = self._attach_scores(selected)
 
         for item_id in self.item_ids:
             if n_items == 1:
@@ -75,21 +75,32 @@ class RandomRecommender:
             candidates = [candidate for candidate in item_pool if candidate != item_id]
             size = min(top_n, len(candidates))
             selected = self.rng.sample(candidates, k=size) if size else []
-            recs[f"item_id#{item_id}"] = list(selected)
+            recs[f"item_id#{item_id}"] = self._attach_scores(selected)
 
         return recs
+
+    def _attach_scores(self, item_ids: Sequence[int]) -> List[Dict[str, float]]:
+        scored = [
+            {
+                "item_id": item_id,
+                "score": round(self.rng.random(), 6),
+            }
+            for item_id in item_ids
+        ]
+        scored.sort(key=lambda entry: entry["score"], reverse=True)
+        return scored
 
 
 def generate_random_recommendations(
     top_n: int = 10,
     seed: int | None = None,
     data_dir: Path = DATA_DIR,
-) -> Dict[str, List[int]]:
+) -> Dict[str, List[Dict[str, float]]]:
     recommender = RandomRecommender.from_data(data_dir=data_dir, seed=seed)
     return recommender.recommend(top_n=top_n)
 
 
-def _dump_recommendations(recommendations: Dict[str, Iterable[int]]) -> str:
+def _dump_recommendations(recommendations: Dict[str, Iterable[Dict[str, float]]]) -> str:
     return json.dumps(recommendations, indent=2, sort_keys=True)
 
 

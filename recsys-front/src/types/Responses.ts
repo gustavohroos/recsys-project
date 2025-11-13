@@ -8,7 +8,12 @@ export interface RecommendationsResponse {
 }
 
 export interface Recommendations {
-    generated_at: Date,
-    items: Array<number>,
-    model?: string
+  generated_at: Date,
+  items: Array<RecommendedItem>,
+  model?: string
+}
+
+export interface RecommendedItem {
+  item_id: number,
+  score: number | null
 }

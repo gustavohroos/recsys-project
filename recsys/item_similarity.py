@@ -108,12 +108,16 @@ def _top_n_similar(
     similarity_matrix: np.ndarray,
     item_ids: Sequence[int],
     top_n: int,
-) -> Dict[str, List[int]]:
+) -> Dict[str, List[Dict[str, float]]]:
     num_items = len(item_ids)
     if similarity_matrix.shape != (num_items, num_items):
         raise ValueError("Similarity matrix shape mismatch")
 
-    recommendations: Dict[str, List[int]] = {}
+    np.clip(similarity_matrix, -1.0, 1.0, out=similarity_matrix)
+    distance_matrix = 1.0 - similarity_matrix
+    max_distance = float(distance_matrix.max()) if distance_matrix.size else 0.0
+
+    recommendations: Dict[str, List[Dict[str, float]]] = {}
     for idx, item_id in enumerate(item_ids):
         scores = similarity_matrix[idx]
         if num_items <= 1:
@@ -126,12 +130,19 @@ def _top_n_similar(
             np.argsort(scores[candidate_indices])[::-1]
         ]
 
-        similar_items: List[int] = []
+        similar_items: List[Dict[str, float]] = []
         for candidate_idx in sorted_candidate_indices:
             candidate_id = item_ids[candidate_idx]
             if candidate_id == item_id:
                 continue
-            similar_items.append(candidate_id)
+            similarity = float(scores[candidate_idx])
+            distance = max(0.0, 1.0 - similarity)
+            if max_distance > 0.0:
+                normalized_distance = min(distance / max_distance, 1.0)
+            else:
+                normalized_distance = 0.0
+            score = 1.0 - normalized_distance
+            similar_items.append({"item_id": candidate_id, "score": round(score, 6)})
             if len(similar_items) >= top_n:
                 break
 
@@ -147,7 +158,7 @@ def generate_item_similarity_recommendations(
     model_name: str = DEFAULT_MODEL_NAME,
     batch_size: int = DEFAULT_BATCH_SIZE,
     seed: int | None = None,
-) -> Dict[str, List[int]]:
+) -> Dict[str, List[Dict[str, float]]]:
     del seed
     if top_n < 1:
         raise ValueError("top_n must be at least 1")
