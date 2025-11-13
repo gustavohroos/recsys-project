@@ -36,7 +36,8 @@ def create_tables(conn: sqlite3.Connection) -> None:
             id INTEGER PRIMARY KEY,
             title TEXT NOT NULL,
             url TEXT,
-            description TEXT
+            description TEXT,
+            image_url TEXT
         )
         """,
         """
@@ -115,6 +116,14 @@ def create_tables(conn: sqlite3.Connection) -> None:
     for statement in statements:
         conn.execute(statement)
 
+    _ensure_column(conn, "items", "image_url", "TEXT")
+
+
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    existing_columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+    if column not in existing_columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
 
 def load_items(conn: sqlite3.Connection, csv_path: Path) -> None:
     with csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
@@ -128,10 +137,11 @@ def load_items(conn: sqlite3.Connection, csv_path: Path) -> None:
                     row.get("Title"),
                     row.get("URL"),
                     row.get("Descriptions"),
+                    row.get("ImageURL"),
                 )
             )
     conn.executemany(
-        "INSERT OR REPLACE INTO items (id, title, url, description) VALUES (?, ?, ?, ?)",
+        "INSERT OR REPLACE INTO items (id, title, url, description, image_url) VALUES (?, ?, ?, ?, ?)",
         rows,
     )
 
@@ -289,16 +299,21 @@ def create_database(db_path: Path = DB_PATH, data_dir: Path = DATA_DIR) -> Path:
     with sqlite3.connect(db_path) as conn:
         conn.execute("PRAGMA foreign_keys = ON")
         create_tables(conn)
-        loaders: Iterable[Tuple[Callable[[sqlite3.Connection, Path], None], str]] = (
-            (load_items, "items.csv"),
+        items_csv = data_dir / "items_with_images.csv"
+        if not items_csv.exists():
+            items_csv = data_dir / "items.csv"
+
+        loaders: Iterable[Tuple[Callable[[sqlite3.Connection, Path], None], Path | str]] = (
+            (load_items, items_csv),
             (load_users, "users.csv"),
             (load_ratings, "ratings.csv"),
             (load_group_sizes, "group_size.csv"),
             (load_group_members, "group.csv"),
             (load_group_ratings, "group_ratings.csv"),
         )
-        for loader, filename in loaders:
-            loader(conn, data_dir / filename)
+        for loader, target in loaders:
+            csv_path = target if isinstance(target, Path) else data_dir / target
+            loader(conn, csv_path)
         conn.commit()
 
     return db_path

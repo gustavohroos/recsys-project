@@ -51,7 +51,7 @@ def list_items(
 
         placeholders = ",".join("?" for _ in requested_ids)
         query = (
-            "SELECT id, title, url, description FROM items "
+            "SELECT id, title, url, description, image_url FROM items "
             f"WHERE id IN ({placeholders}) ORDER BY id"
         )
         rows = _fetch_all(conn, query, tuple(requested_ids))
@@ -60,7 +60,7 @@ def list_items(
             raise HTTPException(status_code=404, detail=f"Items not found: {not_found}")
         return rows
 
-    return _fetch_all(conn, "SELECT id, title, url, description FROM items ORDER BY id")
+    return _fetch_all(conn, "SELECT id, title, url, description, image_url FROM items ORDER BY id")
 
 
 @api_router.get("/users")
