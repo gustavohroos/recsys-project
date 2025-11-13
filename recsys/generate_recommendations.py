@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List
 
+from item_similarity import generate_item_similarity_recommendations
 from random_model import DATA_DIR as DEFAULT_DATA_DIR
 from random_model import generate_random_recommendations
 
@@ -41,6 +42,14 @@ MODEL_REGISTRY: Dict[str, ModelSpec] = {
             top_n=top_n,
             seed=seed,
             data_dir=data_dir,
+        ),
+    ),
+    "item_similarity": ModelSpec(
+        name="item_similarity",
+        runner=lambda top_n, seed, data_dir: generate_item_similarity_recommendations(
+            top_n=top_n,
+            data_dir=data_dir,
+            seed=seed,
         ),
     ),
 }
