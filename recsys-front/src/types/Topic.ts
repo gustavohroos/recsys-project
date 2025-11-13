@@ -3,6 +3,6 @@ export interface Topic {
   title: string;
   url: string;
   description: string;
-  image?: string;
+  image_url?: string;
   score?: number;
 }

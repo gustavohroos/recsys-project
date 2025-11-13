@@ -20,13 +20,9 @@ export default function Home() {
   useEffect(() => {
     (async () => {
       try {
-        const recResponse = await getRecommendationsByUser(randomUserId);
+        const recResponse = await getRecommendationsByUser(userId);
         const itemIds = recResponse.recommendations[0].items;
         let items = await getItemsByIds(itemIds);
-        items = (Array.isArray(items) ? items : []).map((item: any) => ({
-          ...item,
-          image: `https://picsum.photos/200?random=${Math.random()}`,
-        }));
 
         if (items.length > 0) {
           setUserRecommendations(items as Topic[]);
@@ -46,11 +42,6 @@ export default function Home() {
         const recResponse = await getRecommendationsByItem(selectedTopic.id);
         const itemIds = recResponse.recommendations[0].items;
         let items = await getItemsByIds(itemIds);
-
-        items = (Array.isArray(items) ? items : []).map((item: any) => ({
-          ...item,
-          image: `https://picsum.photos/200?random=${Math.random()}`,
-        }));
 
         if (items.length > 0) {
           setItemRecommendations(items as Topic[]);
@@ -82,7 +73,7 @@ export default function Home() {
             {/* LISTA DE TÓPICOS */}
             <div className="w-1/3 border-r border-gray-200 p-6 bg-gray-50">
               <h1 className="text-xl font-semibold mb-4 text-gray-900">
-                Tópicos
+                Recomendações Personalizadas ao Usuário
               </h1>
               <ul className="flex flex-col gap-3">
                 {userRecommendations.map((topic) => (
@@ -102,7 +93,7 @@ export default function Home() {
                     >
                       <div className="flex items-center gap-3">
                         <img
-                          src={topic.image}
+                          src={topic.image_url}
                           alt={topic.title}
                           className="w-12 h-12 rounded-lg object-cover"
                         />
@@ -148,7 +139,7 @@ export default function Home() {
 
                     <motion.img
                       layoutId={`img-${selectedTopic.id}`}
-                      src={selectedTopic.image}
+                      src={selectedTopic.image_url}
                       alt={selectedTopic.title}
                       className="w-64 h-64 rounded-xl object-cover shadow mb-6"
                     />
@@ -157,10 +148,13 @@ export default function Home() {
                       {selectedTopic.description}
                     </p>
 
-                    <LikeDislikeButton itemId={Number(selectedTopic.id)} />
+                    <div className="mt-2">
+                      <LikeDislikeButton itemId={Number(selectedTopic.id)} />
+                    </div>
+                    
 
-                    <div className="mt-4 text-sm text-gray-600">
-                      Score: <strong>{selectedTopic.score}</strong>
+                    <div className="mt-6 text-sm text-gray-600">
+                      Score: <strong>{selectedTopic.score}: Placeholder </strong>
                     </div>
                   </motion.div>
                 )}
@@ -172,7 +166,7 @@ export default function Home() {
 
       {/* RELACIONADOS */}
       <div className="w-80 min-h-screen p-6 bg-gray-900 text-white">
-        <h1 className="text-xl font-semibold mb-4">Relacionados</h1>
+        <h1 className="text-xl font-semibold mb-4">Relacionados ao Item em Foco</h1>
         <AnimatePresence>
           {selectedTopic ? (
             <motion.ul
@@ -189,16 +183,13 @@ export default function Home() {
                     whileHover={{ scale: 1.02, backgroundColor: "#3a3a3a" }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() =>
-                      setSelectedTopic({
-                        ...selectedTopic,
-                        title: related.title,
-                      })
+                      setSelectedTopic(related)
                     }
                     className="w-full text-left p-4 rounded-lg bg-gray-800 border border-gray-700 transition"
                   >
                     <div className="flex items-center gap-3">
                       <img
-                        src={related.image}
+                        src={related.image_url}
                         alt={related.title}
                         className="w-10 h-10 rounded-lg object-cover"
                       />
