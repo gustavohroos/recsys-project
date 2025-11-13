@@ -14,3 +14,7 @@ run-api: setup
 .PHONY: create-db
 create-db: setup
 	. .venv/bin/activate && python data/create_db.py
+
+.PHONY: generate-recommendations
+generate-recommendations: setup
+	. .venv/bin/activate && python recsys/generate_recommendations.py --models random item_similarity --top-n 5 --seed 42

@@ -3,3 +3,6 @@ matplotlib
 scikit-learn
 numpy
 sentence-transformers
+plotly
+anywidget
+nltk

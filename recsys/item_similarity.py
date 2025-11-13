@@ -6,13 +6,23 @@ import csv
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Sequence
+from nltk.corpus import stopwords
+from nltk.stem import WordNetLemmatizer
+from nltk import download as nltk_download
 
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 DEFAULT_MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
-DEFAULT_BATCH_SIZE = 32
+DEFAULT_BATCH_SIZE = 4
+
+nltk_download("stopwords")
+nltk_download("wordnet")
+nltk_download("omw-1.4")
+
+_LEMMATIZER = WordNetLemmatizer()
+_STOP_WORDS = set(stopwords.words("english"))
 
 
 @dataclass(frozen=True)
@@ -61,14 +71,23 @@ def _load_items(data_dir: Path) -> List[ItemRecord]:
     return records
 
 
+def _clean_text(text: str) -> str:
+    tokens = [word.lower() for word in text.split() if word.isalpha()]
+    lemmatized = [
+        _LEMMATIZER.lemmatize(token) for token in tokens if token not in _STOP_WORDS
+    ]
+    if not lemmatized:
+        lemmatized = tokens
+    return " ".join(lemmatized)
+
+
 def _compute_embeddings(
-    records: Sequence[ItemRecord],
+    texts: Sequence[str],
     *,
     model_name: str = DEFAULT_MODEL_NAME,
     batch_size: int = DEFAULT_BATCH_SIZE,
 ) -> np.ndarray:
     model = SentenceTransformer(model_name)
-    texts = [record.text for record in records]
     embeddings = model.encode(
         texts,
         batch_size=batch_size,
@@ -101,10 +120,11 @@ def _top_n_similar(
             recommendations[f"item_id#{item_id}"] = []
             continue
 
-        # Retrieve top_n + 1 to account for the item itself, then drop self-reference.
         candidate_count = min(top_n + 1, num_items)
         candidate_indices = np.argpartition(scores, -candidate_count)[-candidate_count:]
-        sorted_candidate_indices = candidate_indices[np.argsort(scores[candidate_indices])[::-1]]
+        sorted_candidate_indices = candidate_indices[
+            np.argsort(scores[candidate_indices])[::-1]
+        ]
 
         similar_items: List[int] = []
         for candidate_idx in sorted_candidate_indices:
@@ -128,7 +148,7 @@ def generate_item_similarity_recommendations(
     batch_size: int = DEFAULT_BATCH_SIZE,
     seed: int | None = None,
 ) -> Dict[str, List[int]]:
-    del seed  # Unused, but kept for a compatible signature.
+    del seed
     if top_n < 1:
         raise ValueError("top_n must be at least 1")
 
@@ -136,13 +156,16 @@ def generate_item_similarity_recommendations(
         raise FileNotFoundError(f"Data directory not found: {data_dir}")
 
     records = _load_items(data_dir)
-    embeddings = _compute_embeddings(records, model_name=model_name, batch_size=batch_size)
+    cleaned_texts = [_clean_text(record.text) for record in records]
+    embeddings = _compute_embeddings(
+        cleaned_texts, model_name=model_name, batch_size=batch_size
+    )
     similarity = _build_similarity_matrix(embeddings)
     item_ids = [record.item_id for record in records]
     return _top_n_similar(similarity, item_ids, top_n)
 
 
-if __name__ == "__main__":  # pragma: no cover - manual usage helper
+if __name__ == "__main__":
     recommendations = generate_item_similarity_recommendations()
     for key, items in list(recommendations.items())[:5]:
         print(key, "->", items)
