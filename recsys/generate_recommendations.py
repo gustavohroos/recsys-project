@@ -15,7 +15,7 @@ from random_model import generate_random_recommendations
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parent.parent / "data" / "data.db"
 
-ModelFunction = Callable[[int, int | None, Path], Dict[str, List[int]]]
+ModelFunction = Callable[[int, int | None, Path], Dict[str, List[Dict[str, float]]]]
 
 RECOMMENDATIONS_TABLE_SQL = """
 CREATE TABLE IF NOT EXISTS recommendations (
@@ -63,14 +63,14 @@ def _ensure_database(db_path: Path) -> None:
         )
 
 
-def _serialize_items(items: Iterable[int]) -> str:
+def _serialize_items(items: Iterable[Dict[str, float]]) -> str:
     return json.dumps(list(items))
 
 
 def _persist_recommendations(
     conn: sqlite3.Connection,
     model_name: str,
-    recommendations: Dict[str, List[int]],
+    recommendations: Dict[str, List[Dict[str, float]]],
 ) -> int:
     rows = [
         (target_key, model_name, _serialize_items(items))

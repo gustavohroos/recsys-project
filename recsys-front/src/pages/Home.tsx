@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   getItemsByIds,
   getRecommendationsByItem,
@@ -9,24 +9,59 @@ import UserCard from "../components/UserCard";
 import type { Topic } from "../types/Topic";
 import LikeDislikeButton from "../components/LikeButton";
 
-const randomUserId = Math.floor(Math.random() * 70) + 1001;
-
 export default function Home() {
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
   const [userRecommendations, setUserRecommendations] = useState<Topic[]>([]);
   const [itemRecommendations, setItemRecommendations] = useState<Topic[]>([]);
   const [userId, setUserId] = useState(1001);
 
+  const mergeItemsWithScores = useMemo(
+    () =>
+      (items: Topic[], scoredItems: Array<{ item_id: number; score: number | null }>) => {
+        const scoreMap = new Map<number, number | null>();
+        scoredItems.forEach((entry) => {
+          scoreMap.set(entry.item_id, entry.score ?? null);
+        });
+
+        return items
+          .map((item) => {
+            const numericId = Number(item.id);
+            const score = scoreMap.get(numericId) ?? null;
+            return {
+              ...item,
+              score: score ?? undefined,
+            };
+          })
+          .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+      },
+    []
+  );
+
   useEffect(() => {
     (async () => {
       try {
         const recResponse = await getRecommendationsByUser(userId);
-        const itemIds = recResponse.recommendations[0].items;
-        let items = await getItemsByIds(itemIds);
+        const scoredItems = recResponse.recommendations[0]?.items ?? [];
+        const itemIds = scoredItems.map((item) => item.item_id);
 
-        if (items.length > 0) {
-          setUserRecommendations(items as Topic[]);
-          setSelectedTopic((prev) => prev ?? (items[0] as Topic));
+        if (itemIds.length === 0) {
+          setUserRecommendations([]);
+          setSelectedTopic(null);
+          return;
+        }
+
+        const items = await getItemsByIds(itemIds);
+        const merged = mergeItemsWithScores(items as Topic[], scoredItems);
+
+        if (merged.length > 0) {
+          setUserRecommendations(merged);
+          setSelectedTopic((prev) => {
+            if (prev) {
+              const updated = merged.find((topic) => String(topic.id) === String(prev.id));
+              return updated ?? merged[0];
+            }
+            return merged[0];
+          });
         }
       } catch (err) {
         console.error("Failed to fetch items:", err);
@@ -40,17 +75,22 @@ export default function Home() {
     (async () => {
       try {
         const recResponse = await getRecommendationsByItem(selectedTopic.id);
-        const itemIds = recResponse.recommendations[0].items;
-        let items = await getItemsByIds(itemIds);
+        const scoredItems = recResponse.recommendations[0]?.items ?? [];
+        const itemIds = scoredItems.map((item) => item.item_id);
 
-        if (items.length > 0) {
-          setItemRecommendations(items as Topic[]);
+        if (itemIds.length === 0) {
+          setItemRecommendations([]);
+          return;
         }
+
+        const items = await getItemsByIds(itemIds);
+        const merged = mergeItemsWithScores(items as Topic[], scoredItems);
+        setItemRecommendations(merged);
       } catch (err) {
         console.error("Failed to fetch items:", err);
       }
     })();
-  }, [selectedTopic]);
+  }, [selectedTopic, mergeItemsWithScores]);
 
   return (
     <div className="w-full min-h-screen bg-gray-800 flex">
@@ -104,6 +144,11 @@ export default function Home() {
                           <p className="text-xs text-gray-600 line-clamp-2">
                             {topic.description}
                           </p>
+                          {topic.score !== undefined ? (
+                            <p className="mt-1 text-xs text-gray-500">
+                              Score: {topic.score.toFixed(3)}
+                            </p>
+                          ) : null}
                         </div>
                       </div>
                     </motion.button>
@@ -151,11 +196,13 @@ export default function Home() {
                     <div className="mt-2">
                       <LikeDislikeButton itemId={Number(selectedTopic.id)} />
                     </div>
-                    
 
-                    <div className="mt-6 text-sm text-gray-600">
-                      Score: <strong>{selectedTopic.score}: Placeholder </strong>
-                    </div>
+
+                    {selectedTopic.score !== undefined ? (
+                      <div className="mt-6 text-sm text-gray-600">
+                        Score: <strong>{selectedTopic.score.toFixed(3)}</strong>
+                      </div>
+                    ) : null}
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -193,7 +240,12 @@ export default function Home() {
                         alt={related.title}
                         className="w-10 h-10 rounded-lg object-cover"
                       />
-                      <span className="text-sm">{related.title}</span>
+                      <span className="text-sm">
+                        {related.title}
+                        {related.score !== undefined
+                          ? ` • ${related.score.toFixed(3)}`
+                          : ""}
+                      </span>
                     </div>
                   </motion.button>
                 </li>
