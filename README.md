@@ -6,7 +6,7 @@ This repository contains a minimal recommender-system stack used for experimenta
 
 - SQLite database creation from the raw CSV exports using `data/create_db.py`.
 - FastAPI service (`api/main.py`) exposing REST endpoints for users, items, groups, ratings, and stored recommendations.
-- Random baseline recommender (`recsys/random_model.py`) and a runner (`recsys/generate_recommendations.py`) that populates the database with recommendation rows.
+- Random baseline recommender (`recsys/random_model.py`) and a sentence-embedding item-similarity model (`recsys/item_similarity.py`) wired into the shared runner (`recsys/generate_recommendations.py`).
 - CORS-enabled API so it can be consumed directly from web clients during demos.
 
 ## Project Structure
@@ -52,10 +52,10 @@ recsys-front/  # Vite + React frontend
    python data/create_db.py
    ```
 
-5. **Generate baseline recommendations (optional but useful for testing).**
+5. **Generate recommendations (optional but useful for testing).**
 
    ```bash
-   python recsys/generate_recommendations.py --models random --top-n 10 --seed 42
+   python recsys/generate_recommendations.py --models random item_similarity --top-n 10 --seed 42
    ```
 
 6. **Run the FastAPI server.**
