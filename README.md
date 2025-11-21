@@ -37,6 +37,7 @@ recsys-front/  # Vite + React frontend
    ```bash
    python3 -m venv .venv
    source .venv/bin/activate
+   .venv\Scripts\activate # Windows
    ```
 
 3. **Install backend dependencies.**
