@@ -6,3 +6,4 @@ sentence-transformers
 plotly
 anywidget
 nltk
+bertopic
