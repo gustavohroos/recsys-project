@@ -17,3 +17,17 @@ export interface RecommendedItem {
   item_id: number,
   score: number | null
 }
+
+export interface Category {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  item_count: number;
+}
+
+export interface PreferenceRecommendationsResponse {
+  categories: string[];
+  limit: number;
+  items: Array<RecommendedItem>;
+}

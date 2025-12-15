@@ -6,7 +6,13 @@ This repository contains a minimal recommender-system stack used for experimenta
 
 - SQLite database creation from the raw CSV exports using `data/create_db.py`.
 - FastAPI service (`api/main.py`) exposing REST endpoints for users, items, groups, ratings, and stored recommendations.
-- Random baseline recommender (`recsys/random_model.py`) and a sentence-embedding item-similarity model (`recsys/item_similarity.py`) wired into the shared runner (`recsys/generate_recommendations.py`).
+- Multiple recommendation algorithms:
+  - **Random baseline** (`recsys/random_model.py`) - Random recommendations for sanity checks.
+  - **Item similarity** (`recsys/item_similarity.py`) - Content-based recommendations using sentence embeddings.
+  - **Collaborative filtering** (`recsys/collaborative_filtering.py`) - Three approaches:
+    - **User-Based CF**: Finds similar users based on rating patterns and recommends items liked by similar users.
+    - **Item-Based CF**: Finds similar items based on user rating patterns and recommends items similar to those the user liked.
+    - **Matrix Factorization (SVD)**: Decomposes the user-item matrix into latent factors for predictions.
 - CORS-enabled API so it can be consumed directly from web clients during demos.
 
 ## Project Structure
@@ -56,7 +62,14 @@ recsys-front/  # Vite + React frontend
 5. **Generate recommendations (optional but useful for testing).**
 
    ```bash
+   # Generate random and item similarity recommendations
    python recsys/generate_recommendations.py --models random item_similarity --top-n 10 --seed 42
+
+   # Generate collaborative filtering recommendations
+   python recsys/generate_recommendations.py --models user_based_cf item_based_cf matrix_factorization --top-n 10 --seed 42
+
+   # Generate all available models at once
+   python recsys/generate_recommendations.py --models random item_similarity user_based_cf item_based_cf matrix_factorization --top-n 10 --seed 42
    ```
 
 6. **Run the FastAPI server.**

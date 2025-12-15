@@ -1,17 +1,79 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import sqlite3
+import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Sequence
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.routing import APIRouter
+from pydantic import BaseModel
+
+# Add recsys to path for imports
+RECSYS_PATH = Path(__file__).resolve().parent.parent / "recsys"
+sys.path.insert(0, str(RECSYS_PATH))
+
+from preference_recommender import compute_preference_based_recommendations
+from feedback_recommender import (
+    save_feedback,
+    get_user_feedback,
+    get_feedback_adjusted_recommendations,
+    get_all_feedback_stats,
+    ensure_feedback_table,
+)
 
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "data.db"
 
-app = FastAPI()
+# Background task configuration
+RECOMMENDATION_REGENERATION_INTERVAL_SECONDS = 300  # 5 minutes
+_background_task_running = False
+
+
+async def regenerate_recommendations_periodically():
+    """Background task to regenerate recommendations periodically."""
+    global _background_task_running
+
+    while _background_task_running:
+        try:
+            print("[Background] Starting recommendation regeneration...")
+            # Import here to avoid circular imports
+            from generate_recommendations import main as generate_main
+            generate_main()
+            print("[Background] Recommendation regeneration complete.")
+        except Exception as e:
+            print(f"[Background] Error regenerating recommendations: {e}")
+
+        await asyncio.sleep(RECOMMENDATION_REGENERATION_INTERVAL_SECONDS)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage app lifespan - start and stop background tasks."""
+    global _background_task_running
+
+    # Ensure feedback table exists
+    ensure_feedback_table(DB_PATH)
+
+    # Start background task
+    _background_task_running = True
+    task = asyncio.create_task(regenerate_recommendations_periodically())
+
+    yield
+
+    # Stop background task
+    _background_task_running = False
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+
+app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,8 +82,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 api_router = APIRouter(prefix="/api")
-
-
 def get_connection() -> Iterator[sqlite3.Connection]:
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
@@ -241,13 +301,233 @@ def list_recommendations(
     }
 
 
-app.include_router(api_router)
+
+
+
+# Categories endpoints
+@api_router.get("/categories")
+def list_categories(
+    conn: sqlite3.Connection = Depends(get_connection),
+) -> List[Dict[str, Any]]:
+    """Get all available categories with item counts."""
+    try:
+        rows = _fetch_all(
+            conn,
+            """
+            SELECT c.id, c.name, c.description, c.icon,
+                   COUNT(ic.item_id) as item_count
+            FROM categories c
+            LEFT JOIN item_categories ic ON c.id = ic.category_id
+            GROUP BY c.id
+            ORDER BY item_count DESC
+            """
+        )
+        return rows
+    except sqlite3.OperationalError:
+        # Categories table doesn't exist yet
+        return []
+
+
+@api_router.get("/items/{item_id}/categories")
+def get_item_categories(
+    item_id: int,
+    conn: sqlite3.Connection = Depends(get_connection),
+) -> List[Dict[str, Any]]:
+    """Get categories for a specific item."""
+    _ensure_exists(conn, "items", item_id)
+    try:
+        rows = _fetch_all(
+            conn,
+            """
+            SELECT c.id, c.name, c.description, c.icon, ic.is_primary
+            FROM categories c
+            JOIN item_categories ic ON c.id = ic.category_id
+            WHERE ic.item_id = ?
+            ORDER BY ic.is_primary DESC
+            """,
+            (item_id,)
+        )
+        return rows
+    except sqlite3.OperationalError:
+        return []
+
+
+@api_router.get("/categories/{category_id}/items")
+def get_category_items(
+    category_id: str,
+    limit: int = Query(20, ge=1, le=100),
+    conn: sqlite3.Connection = Depends(get_connection),
+) -> List[Dict[str, Any]]:
+    """Get items in a specific category."""
+    try:
+        rows = _fetch_all(
+            conn,
+            """
+            SELECT i.id, i.title, i.url, i.description, i.image_url, ic.is_primary
+            FROM items i
+            JOIN item_categories ic ON i.id = ic.item_id
+            WHERE ic.category_id = ?
+            ORDER BY ic.is_primary DESC, i.id
+            LIMIT ?
+            """,
+            (category_id, limit)
+        )
+        return rows
+    except sqlite3.OperationalError:
+        return []
+
+
+class PreferenceRequest(BaseModel):
+    categories: List[str]
+    limit: int = 10
+
+
+@api_router.post("/recommendations/by-preferences")
+def get_recommendations_by_preferences(
+    request: PreferenceRequest,
+    conn: sqlite3.Connection = Depends(get_connection),
+) -> Dict[str, Any]:
+    """Get recommendations based on category preferences."""
+    if not request.categories:
+        raise HTTPException(status_code=400, detail="At least one category must be provided")
+
+    # Validate categories exist
+    try:
+        existing = _fetch_all(
+            conn,
+            "SELECT id FROM categories WHERE id IN ({})".format(
+                ",".join("?" for _ in request.categories)
+            ),
+            tuple(request.categories)
+        )
+        existing_ids = {row["id"] for row in existing}
+        invalid = [c for c in request.categories if c not in existing_ids]
+        if invalid:
+            raise HTTPException(status_code=400, detail=f"Invalid categories: {invalid}")
+    except sqlite3.OperationalError:
+        raise HTTPException(status_code=500, detail="Categories not initialized. Run extract_metadata.py first.")
+
+    # Get recommendations
+    recommendations = compute_preference_based_recommendations(
+        preferred_categories=request.categories,
+        top_n=request.limit,
+        db_path=DB_PATH,
+    )
+
+    return {
+        "categories": request.categories,
+        "limit": request.limit,
+        "items": recommendations,
+    }
+
+
+# Feedback endpoints
+class FeedbackRequest(BaseModel):
+    user_id: int = 1  # Default user for demo purposes
+    itemId: int
+    feedback: str | None  # "like", "dislike", or null
+
+
+@api_router.post("/feedback")
+def submit_feedback(
+    request: FeedbackRequest,
+) -> Dict[str, Any]:
+    """Submit user feedback (like/dislike) for an item."""
+    if request.feedback not in ("like", "dislike", None):
+        raise HTTPException(
+            status_code=400,
+            detail="feedback must be 'like', 'dislike', or null"
+        )
+
+    result = save_feedback(
+        user_id=request.user_id,
+        item_id=request.itemId,
+        feedback_type=request.feedback,
+        db_path=DB_PATH,
+    )
+
+    return result
+
+
+@api_router.get("/feedback/{user_id}")
+def get_feedback(
+    user_id: int,
+) -> Dict[str, Any]:
+    """Get all feedback for a specific user."""
+    feedback = get_user_feedback(user_id, db_path=DB_PATH)
+    return {
+        "user_id": user_id,
+        **feedback,
+    }
+
+
+@api_router.get("/feedback/stats")
+def get_feedback_stats() -> Dict[str, Any]:
+    """Get global feedback statistics."""
+    return get_all_feedback_stats(db_path=DB_PATH)
+
+
+@api_router.get("/recommendations/with-feedback")
+def get_recommendations_with_feedback(
+    user_id: int = Query(..., description="User id to fetch recommendations for"),
+    model: str | None = Query(default=None, description="Optional model name filter"),
+    limit: int = Query(10, ge=1, le=100, description="Maximum number of items per model"),
+    conn: sqlite3.Connection = Depends(get_connection),
+) -> Dict[str, Any]:
+    """
+    Get recommendations for a user with feedback adjustments applied.
+
+    - Removes disliked items
+    - Boosts liked items and similar items
+    """
+    _ensure_exists(conn, "users", user_id)
+
+    result = get_feedback_adjusted_recommendations(
+        user_id=user_id,
+        model=model,
+        limit=limit,
+        db_path=DB_PATH,
+    )
+
+    if not result["recommendations"]:
+        raise HTTPException(
+            status_code=404,
+            detail="No recommendations found for the requested user"
+        )
+
+    return {
+        "target_type": "user",
+        "target_id": user_id,
+        "target_key": f"user_id#{user_id}",
+        "model": model,
+        "limit": limit,
+        **result,
+    }
+
+
+@api_router.delete("/feedback/reset")
+def reset_all_feedback(
+    conn: sqlite3.Connection = Depends(get_connection),
+) -> Dict[str, Any]:
+    """Reset all user feedback (likes and dislikes) for all users."""
+    try:
+        cursor = conn.execute("DELETE FROM user_feedback")
+        deleted_count = cursor.rowcount
+        conn.commit()
+        return {
+            "status": "success",
+            "message": "All feedback has been reset",
+            "deleted_count": deleted_count,
+        }
+    except sqlite3.OperationalError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to reset feedback: {e}")
 
 
 @app.get("/")
 def root() -> Dict[str, str]:
     return {"message": "Recommender API"}
 
+app.include_router(api_router)
 
 if __name__ == "__main__":
     import uvicorn

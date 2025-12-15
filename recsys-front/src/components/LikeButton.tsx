@@ -1,26 +1,57 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ThumbsUp, ThumbsDown } from "lucide-react";
+
+const API_BASE_URL = "http://127.0.0.1:8000/api";
 
 interface LikeDislikeProps {
   itemId: number; // ID do tópico/item para enviar ao backend
+  userId?: number; // ID do usuário (opcional, default 1)
+  onFeedbackChange?: (feedback: "like" | "dislike" | null) => void; // callback para notificar mudança
 }
 
-export default function LikeDislikeButton({ itemId }: LikeDislikeProps) {
+export default function LikeDislikeButton({ itemId, userId = 1, onFeedbackChange }: LikeDislikeProps) {
   const [status, setStatus] = useState<"like" | "dislike" | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Buscar estado inicial do feedback ao montar o componente
+  useEffect(() => {
+    const fetchInitialFeedback = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/feedback/${userId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.likes?.includes(itemId)) {
+            setStatus("like");
+          } else if (data.dislikes?.includes(itemId)) {
+            setStatus("dislike");
+          } else {
+            setStatus(null);
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao buscar feedback inicial:", err);
+      }
+    };
+
+    fetchInitialFeedback();
+  }, [itemId, userId]);
 
   const sendFeedback = async (newStatus: "like" | "dislike" | null) => {
     try {
       setLoading(true);
 
-      await fetch("/api/feedback", {
+      await fetch(`${API_BASE_URL}/feedback`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          user_id: userId,
           itemId,
           feedback: newStatus, // "like" | "dislike" | null
         }),
       });
+
+      // Notificar componente pai sobre a mudança
+      onFeedbackChange?.(newStatus);
     } catch (err) {
       console.error("Erro ao enviar feedback:", err);
     } finally {
