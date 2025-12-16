@@ -93,7 +93,7 @@ export default function Onboarding() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 to-purple-900 p-8">
+    <div className="min-h-screen bg-blue-900  p-8">
       <div className="max-w-6xl mx-auto">
         <AnimatePresence mode="wait">
           {!showRecommendations ? (
@@ -111,7 +111,7 @@ export default function Onboarding() {
                   animate={{ opacity: 1, y: 0 }}
                   className="text-4xl font-bold text-white mb-4"
                 >
-                  Bem-vindo ao Sistema de Recomendações!
+                  Categorias 
                 </motion.h1>
                 <motion.p
                   initial={{ opacity: 0 }}
@@ -119,12 +119,11 @@ export default function Onboarding() {
                   transition={{ delay: 0.2 }}
                   className="text-xl text-blue-200"
                 >
-                  Selecione as categorias que mais interessam você para receber
+                  Selecione as categorias de temas que mais lhe interessam você para receber
                   recomendações personalizadas
                 </motion.p>
               </div>
 
-              {/* Categories Grid */}
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
                 {categories.map((category, index) => (
                   <motion.button
@@ -135,7 +134,7 @@ export default function Onboarding() {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={() => toggleCategory(category.id)}
-                    className={`p-6 rounded-xl border-2 transition-all duration-200 ${
+                    className={`p-6 rounded-xl border-2 transition-all duration-200 cursor-pointer ${
                       selectedCategories.has(category.id)
                         ? "bg-blue-500 border-blue-300 text-white shadow-lg shadow-blue-500/30"
                         : "bg-white/10 border-white/20 text-white hover:bg-white/20"
@@ -150,7 +149,6 @@ export default function Onboarding() {
                 ))}
               </div>
 
-              {/* Selected count and button */}
               <div className="text-center">
                 <motion.p
                   animate={{ opacity: selectedCategories.size > 0 ? 1 : 0.5 }}
@@ -167,11 +165,11 @@ export default function Onboarding() {
                   disabled={selectedCategories.size === 0 || loadingRecs}
                   className={`px-8 py-4 rounded-full font-semibold text-lg transition-all ${
                     selectedCategories.size > 0
-                      ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg hover:shadow-xl"
+                      ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg hover:shadow-xl cursor-pointer"
                       : "bg-gray-500 text-gray-300 cursor-not-allowed"
                   }`}
                 >
-                  {loadingRecs ? "Gerando recomendações..." : "Ver Recomendações"}
+                  {loadingRecs ? "Gerando recomendações..." : "Gerar Recomendações"}
                 </motion.button>
               </div>
             </motion.div>
@@ -183,17 +181,16 @@ export default function Onboarding() {
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3 }}
             >
-              {/* Header */}
               <div className="text-center mb-8">
                 <motion.h2
                   initial={{ opacity: 0, y: -20 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="text-3xl font-bold text-white mb-2"
                 >
-                  Suas Recomendações Personalizadas
+                  Itens Relacionados
                 </motion.h2>
                 <p className="text-blue-200">
-                  Baseado nas suas preferências:{" "}
+                  Baseado em:{" "}
                   {Array.from(selectedCategories)
                     .map((catId) => categories.find((c) => c.id === catId)?.name)
                     .filter(Boolean)
@@ -201,7 +198,6 @@ export default function Onboarding() {
                 </p>
               </div>
 
-              {/* Recommendations Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
                 {recommendations.map((item, index) => (
                   <motion.div
@@ -210,7 +206,7 @@ export default function Onboarding() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: index * 0.05 }}
                     whileHover={{ scale: 1.02, y: -5 }}
-                    className="bg-white rounded-xl overflow-hidden shadow-lg"
+                    className="bg-white rounded-xl overflow-hidden shadow-lg cursor-pointer"
                   >
                     <img
                       src={item.image_url || "/placeholder.png"}
@@ -236,23 +232,22 @@ export default function Onboarding() {
                 ))}
               </div>
 
-              {/* Action buttons */}
               <div className="flex justify-center gap-4">
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => setShowRecommendations(false)}
-                  className="px-6 py-3 rounded-full font-semibold bg-white/20 text-white border border-white/30 hover:bg-white/30 transition-all"
+                  className="px-6 py-3 rounded-full font-semibold bg-white/20 text-white border border-white/30 hover:bg-white/30 transition-all cursor-pointer"
                 >
-                  ← Alterar Preferências
+                  Alterar Preferências
                 </motion.button>
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={handleGoToHome}
-                  className="px-8 py-3 rounded-full font-semibold bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg hover:shadow-xl transition-all"
+                  className="px-8 py-3 rounded-full font-semibold bg-gradient-to-r from-green-500 to-emerald-500 text-white shadow-lg hover:shadow-xl transition-all cursor-pointer"
                 >
-                  Continuar para o Sistema →
+                  Continuar para o Sistema
                 </motion.button>
               </div>
             </motion.div>

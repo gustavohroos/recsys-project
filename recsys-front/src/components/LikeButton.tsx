@@ -76,7 +76,7 @@ export default function LikeDislikeButton({ itemId, userId = 1, onFeedbackChange
       <button
         disabled={loading}
         onClick={handleLike}
-        className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition shadow-sm ${
+        className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition shadow-sm cursor-pointer ${
           status === "like"
             ? "bg-blue-900 text-white border-blue-900"
             : "bg-white text-gray-800 border-gray-300 hover:bg-gray-100"
@@ -88,7 +88,7 @@ export default function LikeDislikeButton({ itemId, userId = 1, onFeedbackChange
       <button
         disabled={loading}
         onClick={handleDislike}
-        className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition shadow-sm ${
+        className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition shadow-sm cursor-pointer ${
           status === "dislike"
             ? "bg-blue-900 text-white border-blue-900"
             : "bg-white text-gray-800 border-gray-300 hover:bg-gray-100"

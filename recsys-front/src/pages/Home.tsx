@@ -112,23 +112,21 @@ export default function Home() {
 
   return (
     <div className="w-full min-h-screen bg-gray-800 flex">
-      {/* COLUNA 1 — USUÁRIO */}
       <div className="w-72 min-h-screen p-6 bg-gray-900 flex flex-col items-center">
         <UserCard
-          name="User"
-          email="ulian@empresa.com"
+          name="Ulian"
+          email="ulian@ufpel.com"
           role="X"
           avatarUrl="https://i.pravatar.cc/150?img=65"
           currentUserId={userId}
           onUserChange={setUserId}
         />
 
-        {/* Link para Onboarding */}
         <Link
           to="/onboarding"
-          className="mt-6 w-full px-4 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg text-center font-medium hover:from-blue-600 hover:to-purple-600 transition-all shadow-lg hover:shadow-xl"
+          className="mt-6 w-full px-4 py-3 bg-blue-400 text-white rounded-lg text-center font-medium hover:bg-blue-500 transition-all shadow-lg hover:shadow-xl"
         >
-          🎯 Selecionar Preferências
+          Selecionar Preferências
         </Link>
 
         {/* Botão para resetar feedback */}
@@ -145,9 +143,9 @@ export default function Home() {
               }
             }
           }}
-          className="mt-3 w-full px-4 py-3 bg-red-600 text-white rounded-lg text-center font-medium hover:bg-red-700 transition-all shadow-lg hover:shadow-xl"
+          className="mt-3 w-full px-4 py-3 bg-blue-600 text-white rounded-lg text-center font-medium hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl cursor-pointer"
         >
-          🗑️ Resetar Feedbacks
+          Resetar Feedbacks
         </button>
       </div>
 
@@ -170,7 +168,7 @@ export default function Home() {
                       }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setSelectedTopic(topic)}
-                      className={`w-full text-left p-4 rounded-lg border transition ${
+                      className={`w-full text-left p-4 rounded-lg border transition cursor-pointer ${
                         selectedTopic?.id === topic.id
                           ? "bg-blue-100 border-blue-300"
                           : "bg-white border-gray-200"
@@ -182,8 +180,8 @@ export default function Home() {
                           alt={topic.title}
                           className="w-12 h-12 rounded-lg object-cover"
                         />
-                        <div>
-                          <h2 className="text-sm font-medium text-gray-900">
+                        <div className="overflow-hidden">
+                          <h2 className="text-sm font-medium text-gray-900 line-clamp-2">
                             {topic.title}
                           </h2>
                           <p className="text-xs text-gray-600 line-clamp-2">
@@ -281,7 +279,7 @@ export default function Home() {
                     onClick={() =>
                       setSelectedTopic(related)
                     }
-                    className="w-full text-left p-4 rounded-lg bg-gray-800 border border-gray-700 transition"
+                    className="w-full text-left p-4 rounded-lg bg-gray-800 border border-gray-700 transition cursor-pointer"
                   >
                     <div className="flex items-center gap-3">
                       <img
