@@ -111,6 +111,19 @@ def create_tables(conn: sqlite3.Connection) -> None:
             UNIQUE(target_key, model)
         )
         """,
+        """
+        CREATE TABLE IF NOT EXISTS user_feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            item_id INTEGER NOT NULL,
+            feedback_type TEXT NOT NULL CHECK(feedback_type IN ('like', 'dislike')),
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (item_id) REFERENCES items(id),
+            UNIQUE(user_id, item_id)
+        )
+        """,
     )
 
     for statement in statements:

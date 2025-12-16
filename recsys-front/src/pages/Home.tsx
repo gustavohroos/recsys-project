@@ -1,9 +1,11 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { Link } from "react-router-dom";
 import {
   getItemsByIds,
   getRecommendationsByItem,
-  getRecommendationsByUser,
+  getRecommendationsWithFeedback,
+  resetAllFeedback,
 } from "../api/items";
 import UserCard from "../components/UserCard";
 import type { Topic } from "../types/Topic";
@@ -14,6 +16,7 @@ export default function Home() {
   const [userRecommendations, setUserRecommendations] = useState<Topic[]>([]);
   const [itemRecommendations, setItemRecommendations] = useState<Topic[]>([]);
   const [userId, setUserId] = useState(1001);
+  const [refreshKey, setRefreshKey] = useState(0); // Para forçar refresh após feedback
 
   const mergeItemsWithScores = useMemo(
     () =>
@@ -37,12 +40,27 @@ export default function Home() {
     []
   );
 
+  // Função para recarregar recomendações após mudança de feedback
+  const handleFeedbackChange = useCallback((feedback: "like" | "dislike" | null) => {
+    // Se foi um dislike, recarregar as recomendações
+    if (feedback === "dislike") {
+      setRefreshKey((prev) => prev + 1);
+    }
+  }, []);
+
+  // Número de itens a exibir na lista
+  const DISPLAY_LIMIT = 10;
+
   useEffect(() => {
     (async () => {
       try {
-        const recResponse = await getRecommendationsByUser(userId);
+        // Buscar mais itens do que o necessário para compensar os filtrados por feedback
+        // O backend já filtra os dislikes, então pedimos um limite maior
+        const recResponse = await getRecommendationsWithFeedback(userId, "user_based_cf", 30);
         const scoredItems = recResponse.recommendations[0]?.items ?? [];
-        const itemIds = scoredItems.map((item) => item.item_id);
+        // Limitar para exibição
+        const limitedItems = scoredItems.slice(0, DISPLAY_LIMIT);
+        const itemIds = limitedItems.map((item: { item_id: number }) => item.item_id);
 
         if (itemIds.length === 0) {
           setUserRecommendations([]);
@@ -51,7 +69,7 @@ export default function Home() {
         }
 
         const items = await getItemsByIds(itemIds);
-        const merged = mergeItemsWithScores(items as Topic[], scoredItems);
+        const merged = mergeItemsWithScores(items as Topic[], limitedItems);
 
         if (merged.length > 0) {
           setUserRecommendations(merged);
@@ -67,7 +85,7 @@ export default function Home() {
         console.error("Failed to fetch items:", err);
       }
     })();
-  }, [userId]);
+  }, [userId, refreshKey, mergeItemsWithScores]);
 
   useEffect(() => {
     if (!selectedTopic) return;
@@ -94,16 +112,41 @@ export default function Home() {
 
   return (
     <div className="w-full min-h-screen bg-gray-800 flex">
-      {/* COLUNA 1 — USUÁRIO */}
-      <div className="w-72 min-h-screen p-6 bg-gray-900 flex items-start justify-center">
+      <div className="w-72 min-h-screen p-6 bg-gray-900 flex flex-col items-center">
         <UserCard
-          name="User"
-          email="ulian@empresa.com"
+          name="Ulian"
+          email="ulian@ufpel.com"
           role="X"
           avatarUrl="https://i.pravatar.cc/150?img=65"
           currentUserId={userId}
           onUserChange={setUserId}
         />
+
+        <Link
+          to="/onboarding"
+          className="mt-6 w-full px-4 py-3 bg-blue-400 text-white rounded-lg text-center font-medium hover:bg-blue-500 transition-all shadow-lg hover:shadow-xl"
+        >
+          Selecionar Preferências
+        </Link>
+
+        {/* Botão para resetar feedback */}
+        <button
+          onClick={async () => {
+            if (window.confirm("Tem certeza que deseja resetar todos os likes e dislikes de todos os usuários?")) {
+              try {
+                const result = await resetAllFeedback();
+                alert(`${result.message} (${result.deleted_count} registros removidos)`);
+                setRefreshKey((prev) => prev + 1);
+              } catch (err) {
+                console.error("Erro ao resetar feedback:", err);
+                alert("Erro ao resetar feedback");
+              }
+            }
+          }}
+          className="mt-3 w-full px-4 py-3 bg-blue-600 text-white rounded-lg text-center font-medium hover:bg-blue-700 transition-all shadow-lg hover:shadow-xl cursor-pointer"
+        >
+          Resetar Feedbacks
+        </button>
       </div>
 
       {/* COLUNA 2 — LISTA + DETALHES */}
@@ -125,7 +168,7 @@ export default function Home() {
                       }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setSelectedTopic(topic)}
-                      className={`w-full text-left p-4 rounded-lg border transition ${
+                      className={`w-full text-left p-4 rounded-lg border transition cursor-pointer ${
                         selectedTopic?.id === topic.id
                           ? "bg-blue-100 border-blue-300"
                           : "bg-white border-gray-200"
@@ -137,8 +180,8 @@ export default function Home() {
                           alt={topic.title}
                           className="w-12 h-12 rounded-lg object-cover"
                         />
-                        <div>
-                          <h2 className="text-sm font-medium text-gray-900">
+                        <div className="overflow-hidden">
+                          <h2 className="text-sm font-medium text-gray-900 line-clamp-2">
                             {topic.title}
                           </h2>
                           <p className="text-xs text-gray-600 line-clamp-2">
@@ -194,7 +237,11 @@ export default function Home() {
                     </p>
 
                     <div className="mt-2">
-                      <LikeDislikeButton itemId={Number(selectedTopic.id)} />
+                      <LikeDislikeButton
+                        itemId={Number(selectedTopic.id)}
+                        userId={userId}
+                        onFeedbackChange={handleFeedbackChange}
+                      />
                     </div>
 
 
@@ -232,7 +279,7 @@ export default function Home() {
                     onClick={() =>
                       setSelectedTopic(related)
                     }
-                    className="w-full text-left p-4 rounded-lg bg-gray-800 border border-gray-700 transition"
+                    className="w-full text-left p-4 rounded-lg bg-gray-800 border border-gray-700 transition cursor-pointer"
                   >
                     <div className="flex items-center gap-3">
                       <img

@@ -9,6 +9,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List
 
+from collaborative_filtering import (
+    generate_item_based_cf_recommendations,
+    generate_matrix_factorization_recommendations,
+    generate_user_based_cf_recommendations,
+)
 from item_similarity import generate_item_similarity_recommendations
 from random_model import DATA_DIR as DEFAULT_DATA_DIR
 from random_model import generate_random_recommendations
@@ -50,6 +55,30 @@ MODEL_REGISTRY: Dict[str, ModelSpec] = {
             top_n=top_n,
             data_dir=data_dir,
             seed=seed,
+        ),
+    ),
+    "user_based_cf": ModelSpec(
+        name="user_based_cf",
+        runner=lambda top_n, seed, data_dir: generate_user_based_cf_recommendations(
+            top_n=top_n,
+            seed=seed,
+            data_dir=data_dir,
+        ),
+    ),
+    "item_based_cf": ModelSpec(
+        name="item_based_cf",
+        runner=lambda top_n, seed, data_dir: generate_item_based_cf_recommendations(
+            top_n=top_n,
+            seed=seed,
+            data_dir=data_dir,
+        ),
+    ),
+    "matrix_factorization": ModelSpec(
+        name="matrix_factorization",
+        runner=lambda top_n, seed, data_dir: generate_matrix_factorization_recommendations(
+            top_n=top_n,
+            seed=seed,
+            data_dir=data_dir,
         ),
     ),
 }
