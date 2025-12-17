@@ -1,4 +1,8 @@
-import type { Category, PreferenceRecommendationsResponse, RecommendationsResponse } from "../types/Responses";
+import type {
+  Category,
+  PreferenceRecommendationsResponse,
+  RecommendationsResponse,
+} from "../types/Responses";
 import type { Topic } from "../types/Topic";
 
 const API_BASE_URL = "http://127.0.0.1:8000/api";
@@ -112,13 +116,12 @@ export async function getRecommendationsWithFeedback(
     user_id: String(userId),
     limit: String(limit),
   });
+
   if (model) {
     params.set("model", model);
   }
 
-  const res = await fetch(
-    `${API_BASE_URL}/recommendations/with-feedback?${params.toString()}`
-  );
+  const res = await fetch(`${API_BASE_URL}/recommendations/with-feedback?${params.toString()}`);
 
   if (!res.ok) {
     throw new Error(`Feedback-adjusted recommendations for user ${userId} not found`);
@@ -160,5 +163,12 @@ export async function resetAllFeedback(): Promise<ResetFeedbackResponse> {
     throw new Error("Failed to reset feedback");
   }
 
+  return res.json();
+}
+
+// Top Rated
+export async function getTopRated(limit = 50, offset = 0) {
+  const res = await fetch(`${API_BASE_URL}/top-rated?limit=${limit}&offset=${offset}`);
+  if (!res.ok) throw new Error("Failed to fetch top-rated");
   return res.json();
 }

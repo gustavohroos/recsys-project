@@ -68,9 +68,10 @@ recsys-front/  # Vite + React frontend
    # Generate collaborative filtering recommendations
    python recsys/generate_recommendations.py --models user_based_cf item_based_cf matrix_factorization --top-n 10 --seed 42
 
-   # Generate all available models at once
-   python recsys/generate_recommendations.py --models random item_similarity user_based_cf item_based_cf matrix_factorization --top-n 10 --seed 42
+   # Generate top rating
+   python recsys/generate_top_rated.py --min-ratings 3 --limit 500
    ```
+
 
 6. **Run the FastAPI server.**
 

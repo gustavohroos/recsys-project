@@ -236,6 +236,32 @@ def _ensure_exists(conn: sqlite3.Connection, table: str, entity_id: int) -> None
     if row is None:
         raise HTTPException(status_code=404, detail=f"{table.rstrip('s').capitalize()} not found")
 
+@api_router.get("/top-rated")
+def get_top_rated(
+    limit: int = Query(5, ge=1, le=50, description="How many top-rated items to return"),
+    offset: int = Query(0, ge=0, description="Offset for pagination"),
+    conn: sqlite3.Connection = Depends(get_connection),
+) -> Dict[str, Any]:
+    rows = _fetch_all(
+        conn,
+        """
+        SELECT
+          rank,
+          item_id,
+          title,
+          description,
+          image_url,
+          avg_rating,
+          rating_count
+        FROM top_rated_items
+        ORDER BY rank
+        LIMIT ? OFFSET ?;
+        """,
+        (limit, offset),
+    )
+
+    return {"items": rows, "limit": limit, "offset": offset}
+
 
 @api_router.get("/recommendations")
 def list_recommendations(

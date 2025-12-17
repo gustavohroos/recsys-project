@@ -112,6 +112,19 @@ def create_tables(conn: sqlite3.Connection) -> None:
         )
         """,
         """
+        CREATE TABLE IF NOT EXISTS top_rated_items (
+            rank INTEGER PRIMARY KEY,
+            item_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT,
+            image_url TEXT,
+            avg_rating REAL NOT NULL,
+            rating_count INTEGER NOT NULL,
+            FOREIGN KEY (item_id) REFERENCES items(id)
+        )
+        """,
+
+        """
         CREATE TABLE IF NOT EXISTS user_feedback (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,

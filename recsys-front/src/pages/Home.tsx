@@ -6,6 +6,7 @@ import {
   getRecommendationsByItem,
   getRecommendationsWithFeedback,
   resetAllFeedback,
+  getTopRated,
 } from "../api/items";
 import UserCard from "../components/UserCard";
 import type { Topic } from "../types/Topic";
@@ -16,49 +17,91 @@ export default function Home() {
   const [userRecommendations, setUserRecommendations] = useState<Topic[]>([]);
   const [itemRecommendations, setItemRecommendations] = useState<Topic[]>([]);
   const [userId, setUserId] = useState(1001);
-  const [refreshKey, setRefreshKey] = useState(0); // Para forçar refresh após feedback
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // TOP RATED
+  const [topRatedPool, setTopRatedPool] = useState<Topic[]>([]);
+  const [topRatedVisible, setTopRatedVisible] = useState<Topic[]>([]);
+  const [topRatedCursor, setTopRatedCursor] = useState(0);
 
   const mergeItemsWithScores = useMemo(
     () =>
       (items: Topic[], scoredItems: Array<{ item_id: number; score: number | null }>) => {
         const scoreMap = new Map<number, number | null>();
-        scoredItems.forEach((entry) => {
-          scoreMap.set(entry.item_id, entry.score ?? null);
-        });
+        scoredItems.forEach((entry) => scoreMap.set(entry.item_id, entry.score ?? null));
 
         return items
           .map((item) => {
             const numericId = Number(item.id);
             const score = scoreMap.get(numericId) ?? null;
-            return {
-              ...item,
-              score: score ?? undefined,
-            };
+            return { ...item, score: score ?? undefined };
           })
           .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
       },
     []
   );
 
-  // Função para recarregar recomendações após mudança de feedback
   const handleFeedbackChange = useCallback((feedback: "like" | "dislike" | null) => {
-    // Se foi um dislike, recarregar as recomendações
-    if (feedback === "dislike") {
-      setRefreshKey((prev) => prev + 1);
-    }
+    if (feedback === "dislike") setRefreshKey((prev) => prev + 1);
   }, []);
 
-  // Número de itens a exibir na lista
   const DISPLAY_LIMIT = 10;
 
+  // ====== TOP RATED: carregar pool e inicializar visíveis ======
   useEffect(() => {
     (async () => {
       try {
-        // Buscar mais itens do que o necessário para compensar os filtrados por feedback
-        // O backend já filtra os dislikes, então pedimos um limite maior
+        const resp = await getTopRated(50, 0);
+
+        // pool em DESC (maior -> menor)
+        const asTopics: Topic[] = (resp.items ?? [])
+          .map((x: any) => ({
+            id: String(x.item_id),
+            title: x.title,
+            description: x.description,
+            image_url: x.image_url,
+            score: Number(x.avg_rating),
+          }))
+          .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+
+        setTopRatedPool(asTopics);
+
+        const first = asTopics.slice(0, 5);
+        setTopRatedVisible(first); // já está DESC
+        setTopRatedCursor(first.length);
+      } catch (err) {
+        console.error("TOP_RATED fetch failed:", err);
+      }
+    })();
+  }, []);
+
+  // ====== Rotaciona mantendo sempre DESC (maior em cima) ======
+  const rotateTopRated = useCallback(
+    (clickedId: string) => {
+      setTopRatedVisible((prev) => {
+        const remaining = prev.filter((t) => String(t.id) !== String(clickedId));
+        const next = topRatedPool[topRatedCursor];
+
+        // se acabou o pool, só reordena o que restou
+        const updated = next ? [...remaining, next] : [...remaining];
+
+        // sempre DESC (maior -> menor)
+        updated.sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+
+        return updated.slice(0, 5);
+      });
+
+      setTopRatedCursor((c) => c + 1);
+    },
+    [topRatedPool, topRatedCursor]
+  );
+
+  // ====== RECS DO USUÁRIO ======
+  useEffect(() => {
+    (async () => {
+      try {
         const recResponse = await getRecommendationsWithFeedback(userId, "user_based_cf", 30);
         const scoredItems = recResponse.recommendations[0]?.items ?? [];
-        // Limitar para exibição
         const limitedItems = scoredItems.slice(0, DISPLAY_LIMIT);
         const itemIds = limitedItems.map((item: { item_id: number }) => item.item_id);
 
@@ -87,6 +130,7 @@ export default function Home() {
     })();
   }, [userId, refreshKey, mergeItemsWithScores]);
 
+  // ====== RECS DO ITEM ======
   useEffect(() => {
     if (!selectedTopic) return;
 
@@ -129,7 +173,6 @@ export default function Home() {
           Selecionar Preferências
         </Link>
 
-        {/* Botão para resetar feedback */}
         <button
           onClick={async () => {
             if (window.confirm("Tem certeza que deseja resetar todos os likes e dislikes de todos os usuários?")) {
@@ -149,11 +192,10 @@ export default function Home() {
         </button>
       </div>
 
-      {/* COLUNA 2 — LISTA + DETALHES */}
+      {/* COLUNA 2 */}
       <div className="flex-1 min-h-screen p-6 flex justify-center bg-gray-100">
         <div className="w-full max-w-5xl bg-white rounded-xl shadow-xl p-6">
           <div className="flex w-full rounded-xl overflow-hidden border border-gray-200">
-            {/* LISTA DE TÓPICOS */}
             <div className="w-1/3 border-r border-gray-200 p-6 bg-gray-50">
               <h1 className="text-xl font-semibold mb-4 text-gray-900">
                 Recomendações Personalizadas ao Usuário
@@ -162,35 +204,20 @@ export default function Home() {
                 {userRecommendations.map((topic) => (
                   <li key={topic.id}>
                     <motion.button
-                      whileHover={{
-                        scale: 1.02,
-                        boxShadow: "0px 4px 12px rgba(0,0,0,0.15)",
-                      }}
+                      whileHover={{ scale: 1.02, boxShadow: "0px 4px 12px rgba(0,0,0,0.15)" }}
                       whileTap={{ scale: 0.98 }}
                       onClick={() => setSelectedTopic(topic)}
                       className={`w-full text-left p-4 rounded-lg border transition cursor-pointer ${
-                        selectedTopic?.id === topic.id
-                          ? "bg-blue-100 border-blue-300"
-                          : "bg-white border-gray-200"
+                        selectedTopic?.id === topic.id ? "bg-blue-100 border-blue-300" : "bg-white border-gray-200"
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <img
-                          src={topic.image_url}
-                          alt={topic.title}
-                          className="w-12 h-12 rounded-lg object-cover"
-                        />
+                        <img src={topic.image_url} alt={topic.title} className="w-12 h-12 rounded-lg object-cover" />
                         <div className="overflow-hidden">
-                          <h2 className="text-sm font-medium text-gray-900 line-clamp-2">
-                            {topic.title}
-                          </h2>
-                          <p className="text-xs text-gray-600 line-clamp-2">
-                            {topic.description}
-                          </p>
+                          <h2 className="text-sm font-medium text-gray-900 line-clamp-2">{topic.title}</h2>
+                          <p className="text-xs text-gray-600 line-clamp-2">{topic.description}</p>
                           {topic.score !== undefined ? (
-                            <p className="mt-1 text-xs text-gray-500">
-                              Score: {topic.score.toFixed(3)}
-                            </p>
+                            <p className="mt-1 text-xs text-gray-500">Score: {topic.score.toFixed(3)}</p>
                           ) : null}
                         </div>
                       </div>
@@ -200,7 +227,6 @@ export default function Home() {
               </ul>
             </div>
 
-            {/* DETALHES DO TÓPICO */}
             <div className="w-2/3 p-8 bg-white">
               <AnimatePresence mode="wait">
                 {!selectedTopic ? (
@@ -221,9 +247,7 @@ export default function Home() {
                     exit={{ opacity: 0, x: -20 }}
                     transition={{ duration: 0.25 }}
                   >
-                    <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                      {selectedTopic.title}
-                    </h2>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-4">{selectedTopic.title}</h2>
 
                     <motion.img
                       layoutId={`img-${selectedTopic.id}`}
@@ -232,18 +256,11 @@ export default function Home() {
                       className="w-64 h-64 rounded-xl object-cover shadow mb-6"
                     />
 
-                    <p className="text-gray-700 leading-relaxed">
-                      {selectedTopic.description}
-                    </p>
+                    <p className="text-gray-700 leading-relaxed">{selectedTopic.description}</p>
 
                     <div className="mt-2">
-                      <LikeDislikeButton
-                        itemId={Number(selectedTopic.id)}
-                        userId={userId}
-                        onFeedbackChange={handleFeedbackChange}
-                      />
+                      <LikeDislikeButton itemId={Number(selectedTopic.id)} userId={userId} onFeedbackChange={handleFeedbackChange} />
                     </div>
-
 
                     {selectedTopic.score !== undefined ? (
                       <div className="mt-6 text-sm text-gray-600">
@@ -258,8 +275,45 @@ export default function Home() {
         </div>
       </div>
 
-      {/* RELACIONADOS */}
+      {/* COLUNA 3 */}
       <div className="w-80 min-h-screen p-6 bg-gray-900 text-white">
+        <h1 className="text-xl font-semibold mb-1">  
+          <span>🔥</span>
+          <span>Top Avaliados</span>
+        </h1>
+        <AnimatePresence>
+          <motion.ul
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25 }}
+            className="flex flex-col gap-3 mb-8"
+          >
+            {topRatedVisible.map((item) => (
+              <li key={item.id}>
+                <motion.button
+                  whileHover={{ scale: 1.02, backgroundColor: "#3a3a3a" }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => {
+                    setSelectedTopic(item);                 // ABRE NO MEIO
+                    rotateTopRated(String(item.id));        // ROTACIONA
+                  }}
+                  className="w-full text-left p-4 rounded-lg bg-gray-800 border border-gray-700 transition cursor-pointer"
+                  title="Clique para abrir e trocar por outro top-rated"
+                >
+                  <div className="flex items-center gap-3">
+                    <img src={item.image_url} alt={item.title} className="w-10 h-10 rounded-lg object-cover" />
+                    <span className="text-sm">
+                      {item.title}
+                      {item.score !== undefined ? ` • ${Number(item.score).toFixed(2)}` : ""}
+                    </span>
+                  </div>
+                </motion.button>
+              </li>
+            ))}
+          </motion.ul>
+        </AnimatePresence>
+
         <h1 className="text-xl font-semibold mb-4">Relacionados ao Item em Foco</h1>
         <AnimatePresence>
           {selectedTopic ? (
@@ -276,22 +330,14 @@ export default function Home() {
                   <motion.button
                     whileHover={{ scale: 1.02, backgroundColor: "#3a3a3a" }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() =>
-                      setSelectedTopic(related)
-                    }
+                    onClick={() => setSelectedTopic(related)}
                     className="w-full text-left p-4 rounded-lg bg-gray-800 border border-gray-700 transition cursor-pointer"
                   >
                     <div className="flex items-center gap-3">
-                      <img
-                        src={related.image_url}
-                        alt={related.title}
-                        className="w-10 h-10 rounded-lg object-cover"
-                      />
+                      <img src={related.image_url} alt={related.title} className="w-10 h-10 rounded-lg object-cover" />
                       <span className="text-sm">
                         {related.title}
-                        {related.score !== undefined
-                          ? ` • ${related.score.toFixed(3)}`
-                          : ""}
+                        {related.score !== undefined ? ` • ${related.score.toFixed(3)}` : ""}
                       </span>
                     </div>
                   </motion.button>
