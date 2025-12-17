@@ -41,8 +41,23 @@ async def regenerate_recommendations_periodically():
         try:
             print("[Background] Starting recommendation regeneration...")
             # Import here to avoid circular imports
-            from generate_recommendations import main as generate_main
-            generate_main()
+            from generate_recommendations import run_from_args
+            
+            class Args:
+                def __init__(self):
+                    self.models = [
+                        "random",
+                        "item_similarity",
+                        "user_based_cf",
+                        "item_based_cf",
+                        "matrix_factorization",
+                    ]
+                    self.top_n = 10
+                    self.seed = 42
+                    self.db_path = None
+                    self.data_dir = None
+            
+            run_from_args(Args())
             print("[Background] Recommendation regeneration complete.")
         except Exception as e:
             print(f"[Background] Error regenerating recommendations: {e}")
@@ -82,6 +97,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 api_router = APIRouter(prefix="/api")
+
+
 def get_connection() -> Iterator[sqlite3.Connection]:
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
@@ -91,14 +108,18 @@ def get_connection() -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
-def _fetch_all(conn: sqlite3.Connection, query: str, params: Sequence[Any] = ()) -> List[Dict[str, Any]]:
+def _fetch_all(
+    conn: sqlite3.Connection, query: str, params: Sequence[Any] = ()
+) -> List[Dict[str, Any]]:
     cursor = conn.execute(query, params)
     return [dict(row) for row in cursor.fetchall()]
 
 
 def _normalize_scored_items(raw_items: Any, limit: int) -> List[Dict[str, Any]]:
     if not isinstance(raw_items, list):
-        raise HTTPException(status_code=500, detail="Stored recommendations have invalid format")
+        raise HTTPException(
+            status_code=500, detail="Stored recommendations have invalid format"
+        )
 
     normalized: List[Dict[str, Any]] = []
     for entry in raw_items:
@@ -126,14 +147,20 @@ def _normalize_scored_items(raw_items: Any, limit: int) -> List[Dict[str, Any]]:
 
 @api_router.get("/items")
 def list_items(
-    ids: str | None = Query(default=None, description="Comma-separated list of item ids"),
+    ids: str | None = Query(
+        default=None, description="Comma-separated list of item ids"
+    ),
     conn: sqlite3.Connection = Depends(get_connection),
 ) -> List[Dict[str, Any]]:
     if ids:
         try:
-            requested_ids = [int(value.strip()) for value in ids.split(",") if value.strip()]
+            requested_ids = [
+                int(value.strip()) for value in ids.split(",") if value.strip()
+            ]
         except ValueError:
-            raise HTTPException(status_code=400, detail="ids must be integers separated by commas")
+            raise HTTPException(
+                status_code=400, detail="ids must be integers separated by commas"
+            )
         if not requested_ids:
             raise HTTPException(status_code=400, detail="No valid ids provided")
 
@@ -148,16 +175,24 @@ def list_items(
             raise HTTPException(status_code=404, detail=f"Items not found: {not_found}")
         return rows
 
-    return _fetch_all(conn, "SELECT id, title, url, description, image_url FROM items ORDER BY id")
+    return _fetch_all(
+        conn, "SELECT id, title, url, description, image_url FROM items ORDER BY id"
+    )
 
 
 @api_router.get("/users")
-def list_users(conn: sqlite3.Connection = Depends(get_connection)) -> List[Dict[str, Any]]:
-    return _fetch_all(conn, "SELECT id, gender, age_range, married FROM users ORDER BY id")
+def list_users(
+    conn: sqlite3.Connection = Depends(get_connection),
+) -> List[Dict[str, Any]]:
+    return _fetch_all(
+        conn, "SELECT id, gender, age_range, married FROM users ORDER BY id"
+    )
 
 
 @api_router.get("/users/{user_id}")
-def get_user(user_id: int, conn: sqlite3.Connection = Depends(get_connection)) -> Dict[str, Any]:
+def get_user(
+    user_id: int, conn: sqlite3.Connection = Depends(get_connection)
+) -> Dict[str, Any]:
     row = conn.execute(
         "SELECT id, gender, age_range, married FROM users WHERE id = ?",
         (user_id,),
@@ -191,7 +226,9 @@ def list_ratings(
 
 
 @api_router.get("/groups")
-def list_groups(conn: sqlite3.Connection = Depends(get_connection)) -> List[Dict[str, Any]]:
+def list_groups(
+    conn: sqlite3.Connection = Depends(get_connection),
+) -> List[Dict[str, Any]]:
     groups = _fetch_all(conn, "SELECT id FROM groups ORDER BY id")
     memberships = _fetch_all(
         conn,
@@ -200,7 +237,9 @@ def list_groups(conn: sqlite3.Connection = Depends(get_connection)) -> List[Dict
 
     members_by_group: Dict[int, List[int]] = {group["id"]: [] for group in groups}
     for membership in memberships:
-        members_by_group.setdefault(membership["group_id"], []).append(membership["user_id"])
+        members_by_group.setdefault(membership["group_id"], []).append(
+            membership["user_id"]
+        )
 
     return [
         {"id": group_id, "members": members_by_group.get(group_id, [])}
@@ -209,13 +248,17 @@ def list_groups(conn: sqlite3.Connection = Depends(get_connection)) -> List[Dict
 
 
 @api_router.get("/group-sizes")
-def list_group_sizes(conn: sqlite3.Connection = Depends(get_connection)) -> List[Dict[str, Any]]:
+def list_group_sizes(
+    conn: sqlite3.Connection = Depends(get_connection),
+) -> List[Dict[str, Any]]:
     return _fetch_all(conn, "SELECT group_id, size FROM group_sizes ORDER BY group_id")
 
 
 @api_router.get("/group-ratings")
 def list_group_ratings(
-    group_id: int | None = Query(default=None, description="Filter ratings by group id"),
+    group_id: int | None = Query(
+        default=None, description="Filter ratings by group id"
+    ),
     conn: sqlite3.Connection = Depends(get_connection),
 ) -> List[Dict[str, Any]]:
     params: List[Any] = []
@@ -234,15 +277,23 @@ def list_group_ratings(
 def _ensure_exists(conn: sqlite3.Connection, table: str, entity_id: int) -> None:
     row = conn.execute(f"SELECT 1 FROM {table} WHERE id = ?", (entity_id,)).fetchone()
     if row is None:
-        raise HTTPException(status_code=404, detail=f"{table.rstrip('s').capitalize()} not found")
+        raise HTTPException(
+            status_code=404, detail=f"{table.rstrip('s').capitalize()} not found"
+        )
 
 
 @api_router.get("/recommendations")
 def list_recommendations(
-    user_id: int | None = Query(default=None, description="User id to fetch recommendations for"),
-    item_id: int | None = Query(default=None, description="Item id to fetch recommendations for"),
+    user_id: int | None = Query(
+        default=None, description="User id to fetch recommendations for"
+    ),
+    item_id: int | None = Query(
+        default=None, description="Item id to fetch recommendations for"
+    ),
     model: str | None = Query(default=None, description="Optional model name filter"),
-    limit: int = Query(10, ge=1, le=100, description="Maximum number of items per model"),
+    limit: int = Query(
+        10, ge=1, le=100, description="Maximum number of items per model"
+    ),
     conn: sqlite3.Connection = Depends(get_connection),
 ) -> Dict[str, Any]:
     if user_id is None and item_id is None:
@@ -259,7 +310,9 @@ def list_recommendations(
         target_type = "item"
         target_id = item_id
     else:
-        raise HTTPException(status_code=400, detail="Unable to resolve recommendation target")
+        raise HTTPException(
+            status_code=400, detail="Unable to resolve recommendation target"
+        )
 
     filters = ["target_key = ?"]
     params: List[Any] = [target_key]
@@ -275,14 +328,18 @@ def list_recommendations(
     rows = _fetch_all(conn, query, tuple(params))
 
     if not rows:
-        raise HTTPException(status_code=404, detail="No recommendations found for the requested target")
+        raise HTTPException(
+            status_code=404, detail="No recommendations found for the requested target"
+        )
 
     recommendations = []
     for row in rows:
         try:
             items = json.loads(row["items"])
         except json.JSONDecodeError as exc:
-            raise HTTPException(status_code=500, detail="Stored recommendations are corrupted") from exc
+            raise HTTPException(
+                status_code=500, detail="Stored recommendations are corrupted"
+            ) from exc
         recommendations.append(
             {
                 "model": row["model"],
@@ -301,9 +358,6 @@ def list_recommendations(
     }
 
 
-
-
-
 # Categories endpoints
 @api_router.get("/categories")
 def list_categories(
@@ -320,7 +374,7 @@ def list_categories(
             LEFT JOIN item_categories ic ON c.id = ic.category_id
             GROUP BY c.id
             ORDER BY item_count DESC
-            """
+            """,
         )
         return rows
     except sqlite3.OperationalError:
@@ -345,7 +399,7 @@ def get_item_categories(
             WHERE ic.item_id = ?
             ORDER BY ic.is_primary DESC
             """,
-            (item_id,)
+            (item_id,),
         )
         return rows
     except sqlite3.OperationalError:
@@ -370,7 +424,7 @@ def get_category_items(
             ORDER BY ic.is_primary DESC, i.id
             LIMIT ?
             """,
-            (category_id, limit)
+            (category_id, limit),
         )
         return rows
     except sqlite3.OperationalError:
@@ -389,7 +443,9 @@ def get_recommendations_by_preferences(
 ) -> Dict[str, Any]:
     """Get recommendations based on category preferences."""
     if not request.categories:
-        raise HTTPException(status_code=400, detail="At least one category must be provided")
+        raise HTTPException(
+            status_code=400, detail="At least one category must be provided"
+        )
 
     # Validate categories exist
     try:
@@ -398,14 +454,19 @@ def get_recommendations_by_preferences(
             "SELECT id FROM categories WHERE id IN ({})".format(
                 ",".join("?" for _ in request.categories)
             ),
-            tuple(request.categories)
+            tuple(request.categories),
         )
         existing_ids = {row["id"] for row in existing}
         invalid = [c for c in request.categories if c not in existing_ids]
         if invalid:
-            raise HTTPException(status_code=400, detail=f"Invalid categories: {invalid}")
+            raise HTTPException(
+                status_code=400, detail=f"Invalid categories: {invalid}"
+            )
     except sqlite3.OperationalError:
-        raise HTTPException(status_code=500, detail="Categories not initialized. Run extract_metadata.py first.")
+        raise HTTPException(
+            status_code=500,
+            detail="Categories not initialized. Run extract_metadata.py first.",
+        )
 
     # Get recommendations
     recommendations = compute_preference_based_recommendations(
@@ -435,8 +496,7 @@ def submit_feedback(
     """Submit user feedback (like/dislike) for an item."""
     if request.feedback not in ("like", "dislike", None):
         raise HTTPException(
-            status_code=400,
-            detail="feedback must be 'like', 'dislike', or null"
+            status_code=400, detail="feedback must be 'like', 'dislike', or null"
         )
 
     result = save_feedback(
@@ -471,7 +531,9 @@ def get_feedback_stats() -> Dict[str, Any]:
 def get_recommendations_with_feedback(
     user_id: int = Query(..., description="User id to fetch recommendations for"),
     model: str | None = Query(default=None, description="Optional model name filter"),
-    limit: int = Query(10, ge=1, le=100, description="Maximum number of items per model"),
+    limit: int = Query(
+        10, ge=1, le=100, description="Maximum number of items per model"
+    ),
     conn: sqlite3.Connection = Depends(get_connection),
 ) -> Dict[str, Any]:
     """
@@ -491,8 +553,7 @@ def get_recommendations_with_feedback(
 
     if not result["recommendations"]:
         raise HTTPException(
-            status_code=404,
-            detail="No recommendations found for the requested user"
+            status_code=404, detail="No recommendations found for the requested user"
         )
 
     return {
@@ -526,6 +587,7 @@ def reset_all_feedback(
 @app.get("/")
 def root() -> Dict[str, str]:
     return {"message": "Recommender API"}
+
 
 app.include_router(api_router)
 

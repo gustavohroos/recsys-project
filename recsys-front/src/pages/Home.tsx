@@ -20,7 +20,10 @@ export default function Home() {
 
   const mergeItemsWithScores = useMemo(
     () =>
-      (items: Topic[], scoredItems: Array<{ item_id: number; score: number | null }>) => {
+      (
+        items: Topic[],
+        scoredItems: Array<{ item_id: number; score: number | null }>
+      ) => {
         const scoreMap = new Map<number, number | null>();
         scoredItems.forEach((entry) => {
           scoreMap.set(entry.item_id, entry.score ?? null);
@@ -41,12 +44,15 @@ export default function Home() {
   );
 
   // Função para recarregar recomendações após mudança de feedback
-  const handleFeedbackChange = useCallback((feedback: "like" | "dislike" | null) => {
-    // Se foi um dislike, recarregar as recomendações
-    if (feedback === "dislike") {
-      setRefreshKey((prev) => prev + 1);
-    }
-  }, []);
+  const handleFeedbackChange = useCallback(
+    (feedback: "like" | "dislike" | null) => {
+      // Se foi um dislike, recarregar as recomendações
+      if (feedback === "dislike") {
+        setRefreshKey((prev) => prev + 1);
+      }
+    },
+    []
+  );
 
   // Número de itens a exibir na lista
   const DISPLAY_LIMIT = 10;
@@ -56,11 +62,17 @@ export default function Home() {
       try {
         // Buscar mais itens do que o necessário para compensar os filtrados por feedback
         // O backend já filtra os dislikes, então pedimos um limite maior
-        const recResponse = await getRecommendationsWithFeedback(userId, "user_based_cf", 30);
+        const recResponse = await getRecommendationsWithFeedback(
+          userId,
+          "user_based_cf",
+          30
+        );
         const scoredItems = recResponse.recommendations[0]?.items ?? [];
         // Limitar para exibição
         const limitedItems = scoredItems.slice(0, DISPLAY_LIMIT);
-        const itemIds = limitedItems.map((item: { item_id: number }) => item.item_id);
+        const itemIds = limitedItems.map(
+          (item: { item_id: number }) => item.item_id
+        );
 
         if (itemIds.length === 0) {
           setUserRecommendations([]);
@@ -75,7 +87,9 @@ export default function Home() {
           setUserRecommendations(merged);
           setSelectedTopic((prev) => {
             if (prev) {
-              const updated = merged.find((topic) => String(topic.id) === String(prev.id));
+              const updated = merged.find(
+                (topic) => String(topic.id) === String(prev.id)
+              );
               return updated ?? merged[0];
             }
             return merged[0];
@@ -132,10 +146,16 @@ export default function Home() {
         {/* Botão para resetar feedback */}
         <button
           onClick={async () => {
-            if (window.confirm("Tem certeza que deseja resetar todos os likes e dislikes de todos os usuários?")) {
+            if (
+              window.confirm(
+                "Tem certeza que deseja resetar todos os likes e dislikes de todos os usuários?"
+              )
+            ) {
               try {
                 const result = await resetAllFeedback();
-                alert(`${result.message} (${result.deleted_count} registros removidos)`);
+                alert(
+                  `${result.message} (${result.deleted_count} registros removidos)`
+                );
                 setRefreshKey((prev) => prev + 1);
               } catch (err) {
                 console.error("Erro ao resetar feedback:", err);
@@ -225,12 +245,18 @@ export default function Home() {
                       {selectedTopic.title}
                     </h2>
 
-                    <motion.img
-                      layoutId={`img-${selectedTopic.id}`}
-                      src={selectedTopic.image_url}
-                      alt={selectedTopic.title}
-                      className="w-64 h-64 rounded-xl object-cover shadow mb-6"
-                    />
+                    <a
+                      href={selectedTopic.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <motion.img
+                        layoutId={`img-${selectedTopic.id}`}
+                        src={selectedTopic.image_url}
+                        alt={selectedTopic.title}
+                        className="w-64 h-64 rounded-xl object-cover shadow mb-6 cursor-pointer"
+                      />
+                    </a>
 
                     <p className="text-gray-700 leading-relaxed">
                       {selectedTopic.description}
@@ -243,7 +269,6 @@ export default function Home() {
                         onFeedbackChange={handleFeedbackChange}
                       />
                     </div>
-
 
                     {selectedTopic.score !== undefined ? (
                       <div className="mt-6 text-sm text-gray-600">
@@ -260,7 +285,9 @@ export default function Home() {
 
       {/* RELACIONADOS */}
       <div className="w-80 min-h-screen p-6 bg-gray-900 text-white">
-        <h1 className="text-xl font-semibold mb-4">Relacionados ao Item em Foco</h1>
+        <h1 className="text-xl font-semibold mb-4">
+          Relacionados ao Item em Foco
+        </h1>
         <AnimatePresence>
           {selectedTopic ? (
             <motion.ul
@@ -276,9 +303,7 @@ export default function Home() {
                   <motion.button
                     whileHover={{ scale: 1.02, backgroundColor: "#3a3a3a" }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() =>
-                      setSelectedTopic(related)
-                    }
+                    onClick={() => setSelectedTopic(related)}
                     className="w-full text-left p-4 rounded-lg bg-gray-800 border border-gray-700 transition cursor-pointer"
                   >
                     <div className="flex items-center gap-3">

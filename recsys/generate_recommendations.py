@@ -191,16 +191,27 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
-    results = run_models(
+    results = run_from_args(args)
+    
+    for model_name, count in results.items():
+        print(f"Stored {count} recommendation rows for model '{model_name}'")
+
+
+def run_from_args(args) -> dict:
+    if args.db_path is None:
+        args.db_path = DEFAULT_DB_PATH
+        
+    if args.data_dir is None:
+        args.data_dir = DEFAULT_DATA_DIR
+        
+    return run_models(
         args.models,
         top_n=args.top_n,
         seed=args.seed,
         data_dir=args.data_dir,
         db_path=args.db_path,
     )
-    for model_name, count in results.items():
-        print(f"Stored {count} recommendation rows for model '{model_name}'")
-
-
+    
+    
 if __name__ == "__main__":
     main()
