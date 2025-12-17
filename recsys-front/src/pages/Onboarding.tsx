@@ -165,7 +165,7 @@ export default function Onboarding() {
                   disabled={selectedCategories.size === 0 || loadingRecs}
                   className={`px-8 py-4 rounded-full font-semibold text-lg transition-all ${
                     selectedCategories.size > 0
-                      ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg hover:shadow-xl cursor-pointer"
+                      ? "bg-blue-400 text-white shadow-lg hover:shadow-xl cursor-pointer"
                       : "bg-gray-500 text-gray-300 cursor-not-allowed"
                   }`}
                 >
