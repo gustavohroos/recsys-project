@@ -77,20 +77,19 @@ def ensure_feedback_table(db_path: Path = DB_PATH) -> None:
 def save_feedback(
     user_id: int,
     item_id: int,
-    feedback_type: Optional[str],
+    rating: Optional[float],
     db_path: Path = DB_PATH,
 ) -> Dict[str, Any]:
-    """Store feedback as a rating row.
+    """Store star feedback as a rating row (type = 'feedback').
 
-    Like => rating 5, Dislike => rating 1, stored with type = 'feedback'.
-    Passing ``None`` removes any feedback row for the user-item pair.
+    rating in [1,5]; passing None removes the feedback row.
     """
 
     ensure_feedback_table(db_path)
     conn = _get_connection(db_path)
 
     try:
-        if feedback_type is None:
+        if rating is None:
             conn.execute(
                 "DELETE FROM ratings WHERE user_id = ? AND item_id = ? AND type = 'feedback'",
                 (user_id, item_id),
@@ -100,14 +99,14 @@ def save_feedback(
                 "status": "removed",
                 "user_id": user_id,
                 "item_id": item_id,
-                "feedback_type": None,
                 "rating": None,
             }
 
-        if feedback_type not in {"like", "dislike"}:
-            raise ValueError("feedback_type must be 'like' or 'dislike'")
-
-        rating_value = 5 if feedback_type == "like" else 1
+        rating_value = float(rating)
+        if rating_value < 1.0:
+            rating_value = 1.0
+        if rating_value > 5.0:
+            rating_value = 5.0
 
         # Remove existing feedback rows for this pair to keep only the latest entry
         conn.execute(
@@ -129,7 +128,6 @@ def save_feedback(
             "status": "saved",
             "user_id": user_id,
             "item_id": item_id,
-            "feedback_type": feedback_type,
             "rating": rating_value,
         }
     finally:
@@ -154,14 +152,19 @@ def get_user_feedback(
             """
             SELECT item_id, rating
             FROM ratings
-            WHERE user_id = ?
+            WHERE user_id = ? AND type = 'feedback'
             """,
             (user_id,),
         ).fetchall()
 
-        items = [{"item_id": row["item_id"], "rating": row["rating"]} for row in rows]
+        items = [
+            {"item_id": row["item_id"], "rating": row["rating"]}
+            for row in rows
+        ]
+        likes = [row["item_id"] for row in rows if row["rating"] is not None and row["rating"] >= 4]
+        dislikes = [row["item_id"] for row in rows if row["rating"] is not None and row["rating"] <= 2]
 
-        return {"items": items}
+        return {"items": items, "likes": likes, "dislikes": dislikes}
     finally:
         conn.close()
 
@@ -228,8 +231,8 @@ def adjust_recommendations_with_feedback(
         Adjusted and filtered recommendations
     """
     feedback = get_user_feedback(user_id, db_path)
-    liked_items = set(feedback["likes"])
-    disliked_items = set(feedback["dislikes"])
+    liked_items = set(feedback.get("likes", []))
+    disliked_items = set(feedback.get("dislikes", []))
 
     # Get items similar to liked items
     similar_to_liked: set[int] = set()
@@ -250,20 +253,24 @@ def adjust_recommendations_with_feedback(
         if item_id in disliked_items:
             continue
 
-        score = rec.get("score", 0.5)
+        raw_score = rec.get("score")
+        score = float(raw_score) if raw_score is not None else 0.0
 
         # Boost liked items
         if item_id in liked_items:
-            score = min(score * LIKE_BOOST_FACTOR, 1.0)
+            score = min(score * LIKE_BOOST_FACTOR, 5.0)
         # Boost items similar to liked items
         elif item_id in similar_to_liked:
-            score = min(score * SIMILAR_ITEM_BOOST_FACTOR, 1.0)
+            score = min(score * SIMILAR_ITEM_BOOST_FACTOR, 5.0)
 
         adjusted_rec = {**rec, "score": float(score)}
         adjusted_recommendations.append(adjusted_rec)
 
     # Re-sort by adjusted score
-    adjusted_recommendations.sort(key=lambda x: x.get("score", 0), reverse=True)
+    adjusted_recommendations.sort(
+        key=lambda x: x.get("score", 0.0) if x.get("score") is not None else 0.0,
+        reverse=True,
+    )
 
     return adjusted_recommendations
 

@@ -496,28 +496,32 @@ def get_recommendations_by_preferences(
 # Feedback endpoints
 class FeedbackRequest(BaseModel):
     user_id: int = 1  # Default user for demo purposes
-    itemId: int
-    feedback: str | None  # "like", "dislike", or null
+    item_id: int
+    rating: float | None  # 1-5 stars; null removes feedback
 
 
 @api_router.post("/feedback")
 def submit_feedback(
     request: FeedbackRequest,
 ) -> Dict[str, Any]:
-    """Submit user feedback (like/dislike) for an item.
+    """Submit star feedback for an item.
 
-    Feedback is stored in the ratings table with rating 5 (like) or 1 (dislike)
-    and type = 'feedback'.
+    Stored in the ratings table with type = 'feedback'. Pass rating=null to remove.
     """
-    if request.feedback not in ("like", "dislike", None):
-        raise HTTPException(
-            status_code=400, detail="feedback must be 'like', 'dislike', or null"
-        )
+    if request.rating is not None:
+        try:
+            rating_val = float(request.rating)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="rating must be numeric between 1 and 5")
+        if rating_val < 1 or rating_val > 5:
+            raise HTTPException(status_code=400, detail="rating must be between 1 and 5")
+    else:
+        rating_val = None
 
     result = save_feedback(
         user_id=request.user_id,
-        item_id=request.itemId,
-        feedback_type=request.feedback,
+        item_id=request.item_id,
+        rating=rating_val,
         db_path=DB_PATH,
     )
 
