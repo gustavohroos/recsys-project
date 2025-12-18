@@ -185,7 +185,7 @@ def list_users(
     conn: sqlite3.Connection = Depends(get_connection),
 ) -> List[Dict[str, Any]]:
     return _fetch_all(
-        conn, "SELECT id, gender, age_range, married FROM users ORDER BY id"
+        conn, "SELECT id, picture FROM users ORDER BY id"
     )
 
 
@@ -194,7 +194,7 @@ def get_user(
     user_id: int, conn: sqlite3.Connection = Depends(get_connection)
 ) -> Dict[str, Any]:
     row = conn.execute(
-        "SELECT id, gender, age_range, married FROM users WHERE id = ?",
+        "SELECT id, picture FROM users WHERE id = ?",
         (user_id,),
     ).fetchone()
     if row is None:
