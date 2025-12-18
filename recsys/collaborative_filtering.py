@@ -1,12 +1,16 @@
-"""Collaborative Filtering recommender using user-item ratings matrix."""
+"""Collaborative Filtering recommender using user-item ratings matrix.
+
+This implementation reads data from the SQLite database (data.db) where
+feedback is stored directly in the ratings table using `type = 'feedback'`
+with Like = rating 5.0 and Dislike = rating 1.0.
+"""
 
 from __future__ import annotations
 
-import csv
+import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
-from collections import defaultdict
+from typing import Dict, List, Tuple
 
 import numpy as np
 from scipy.sparse import csr_matrix
@@ -14,6 +18,7 @@ from scipy.sparse.linalg import svds
 from sklearn.metrics.pairwise import cosine_similarity
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+DB_PATH = DATA_DIR / "data.db"
 
 # Minimum number of common ratings required for similarity calculation
 MIN_COMMON_RATINGS = 2
@@ -22,77 +27,79 @@ K_NEIGHBORS = 20
 # SVD components for matrix factorization
 N_COMPONENTS = 50
 
+def _clamp_rating_1_to_5(raw_rating: float) -> float:
+    """Clamp rating to the 1..5 scale used in the dataset.
 
-def _normalize_row(row: Dict[str, str | None]) -> Dict[str, str | None]:
-    """Normalize CSV row by stripping whitespace from keys and values."""
-    return {
-        key.strip(): (value.strip() if value else value)
-        for key, value in row.items()
-        if key
-    }
+    We keep ratings in their original magnitude (1..5) instead of
+    normalizing to [0,1] so scores retain variance and avoid collapsing
+    to 1.0 after prediction.
+    """
+    return float(np.clip(raw_rating, 1.0, 5.0))
 
 
-def _load_ratings(data_dir: Path) -> List[Tuple[int, int, float]]:
-    """Load ratings from CSV file.
+def _load_user_ids_from_sqlite(db_path: Path) -> List[int]:
+    with sqlite3.connect(db_path) as conn:
+        rows = conn.execute("SELECT id FROM users ORDER BY id").fetchall()
+    user_ids = [int(row[0]) for row in rows]
+    if not user_ids:
+        raise ValueError(f"No users found in SQLite DB: {db_path}")
+    return user_ids
+
+
+def _load_item_ids_from_sqlite(db_path: Path) -> List[int]:
+    with sqlite3.connect(db_path) as conn:
+        rows = conn.execute("SELECT id FROM items ORDER BY id").fetchall()
+    item_ids = [int(row[0]) for row in rows]
+    if not item_ids:
+        raise ValueError(f"No items found in SQLite DB: {db_path}")
+    return item_ids
+
+
+def _load_ratings_from_sqlite(db_path: Path) -> List[Tuple[int, int, float]]:
+    """Load ratings from SQLite, including feedback stored as ratings.
+
+    Feedback entries live in the ratings table with `type = 'feedback'` and
+    rating values 5 (like) or 1 (dislike). The latest rating per user-item
+    pair is used, so feedback overrides older explicit ratings automatically.
 
     Returns:
         List of (user_id, item_id, rating) tuples.
     """
-    csv_path = data_dir / "ratings.csv"
-    if not csv_path.exists():
-        raise FileNotFoundError(f"ratings.csv not found in {data_dir}")
+    if not db_path.exists():
+        raise FileNotFoundError(f"Database not found: {db_path}")
 
-    ratings: List[Tuple[int, int, float]] = []
-    with csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle)
-        for raw_row in reader:
-            if raw_row is None:
+    with sqlite3.connect(db_path) as conn:
+        # Load existing ratings from ratings table
+        rows = conn.execute(
+            """
+            SELECT r.user_id, r.item_id, r.rating
+            FROM ratings r
+            JOIN (
+                SELECT user_id, item_id, MAX(id) AS max_id
+                FROM ratings
+                WHERE rating IS NOT NULL
+                GROUP BY user_id, item_id
+            ) latest
+            ON latest.user_id = r.user_id
+            AND latest.item_id = r.item_id
+            AND latest.max_id = r.id
+            """
+        ).fetchall()
+
+        ratings_by_pair: Dict[Tuple[int, int], float] = {}
+        for user_id, item_id, rating in rows:
+            if user_id is None or item_id is None or rating is None:
                 continue
-            row = _normalize_row(raw_row)
+            ratings_by_pair[(int(user_id), int(item_id))] = _clamp_rating_1_to_5(float(rating))
 
-            user_id_str = row.get("UserID")
-            item_id_str = row.get("Item")
-            rating_str = row.get("Rating")
+        print(f"[CF] Loaded {len(ratings_by_pair)} ratings from ratings table (including feedback)")
 
-            if not user_id_str or not item_id_str or not rating_str:
-                continue
-
-            try:
-                user_id = int(user_id_str)
-                item_id = int(item_id_str)
-                rating = float(rating_str)
-                ratings.append((user_id, item_id, rating))
-            except ValueError:
-                continue
+    ratings = [(u, i, r) for (u, i), r in ratings_by_pair.items()]
 
     if not ratings:
-        raise ValueError(f"No ratings loaded from {csv_path}")
+        raise ValueError(f"No ratings found in SQLite DB: {db_path}")
 
     return ratings
-
-
-def _load_identifiers(csv_path: Path, id_column: str) -> List[int]:
-    """Load identifiers from a CSV file."""
-    identifiers: List[int] = []
-    with csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle)
-        for raw_row in reader:
-            if raw_row is None:
-                continue
-            normalized = {
-                key.strip(): (value.strip() if value else value)
-                for key, value in raw_row.items()
-                if key
-            }
-            value = normalized.get(id_column)
-            if value in (None, ""):
-                continue
-            identifiers.append(int(value))
-
-    if not identifiers:
-        raise ValueError(f"No identifiers found in {csv_path}")
-    return identifiers
-
 
 @dataclass
 class RatingsMatrix:
@@ -267,7 +274,7 @@ class UserBasedCF:
             return user_mean or self.ratings_matrix.global_mean
 
         predicted = user_mean + (numerator / denominator)
-        # Clip to valid rating range
+        # Clip to rating scale
         return float(np.clip(predicted, 1.0, 5.0))
 
     def recommend_for_user(
@@ -384,8 +391,8 @@ class ItemBasedCF:
         if denominator == 0:
             return self.ratings_matrix.item_means[item_idx] or self.ratings_matrix.global_mean
 
-        predicted = numerator / denominator
-        return float(np.clip(predicted, 1.0, 5.0))
+            predicted = numerator / denominator
+            return float(np.clip(predicted, 1.0, 5.0))
 
     def recommend_for_user(
         self,
@@ -525,7 +532,7 @@ class MatrixFactorizationCF:
         user_vec = self.user_factors[user_idx] * self.sigma
         item_vec = self.item_factors[item_idx]
         pred = np.dot(user_vec, item_vec) + self._row_means[user_idx]
-        return float(np.clip(pred, 1.0, 5.0))
+        return float(np.clip(pred, 0.0, 1.0))
 
     def recommend_for_user(
         self,
@@ -553,7 +560,7 @@ class MatrixFactorizationCF:
         # Compute all predictions for this user
         user_vec = self.user_factors[user_idx] * self.sigma
         all_predictions = np.dot(user_vec, self.item_factors.T) + self._row_means[user_idx]
-        all_predictions = np.clip(all_predictions, 1.0, 5.0)
+        all_predictions = np.clip(all_predictions, 0.0, 1.0)
 
         # Filter out rated items and get top-N
         predictions: List[Tuple[int, float]] = []
@@ -642,10 +649,15 @@ def generate_collaborative_filtering_recommendations(
     if not data_dir.exists():
         raise FileNotFoundError(f"Data directory not found: {data_dir}")
 
-    # Load data
-    ratings = _load_ratings(data_dir)
-    user_ids = _load_identifiers(data_dir / "users.csv", "UserID")
-    item_ids = _load_identifiers(data_dir / "items.csv", "Item")
+    db_path = data_dir / "data.db"
+
+    # Prefer SQLite DB (created by data/create_db.py). Fall back to CSVs for compatibility.
+    if db_path.exists():
+        user_ids = _load_user_ids_from_sqlite(db_path)
+        item_ids = _load_item_ids_from_sqlite(db_path)
+        ratings = _load_ratings_from_sqlite(db_path)
+    else:
+        raise FileNotFoundError(f"Database not found: {db_path}")
 
     # Build ratings matrix
     ratings_matrix = RatingsMatrix.from_ratings(ratings, user_ids, item_ids)
