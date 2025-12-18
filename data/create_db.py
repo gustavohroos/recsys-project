@@ -45,7 +45,8 @@ def create_tables(conn: sqlite3.Connection) -> None:
             id INTEGER PRIMARY KEY,
             gender INTEGER,
             age_range TEXT,
-            married INTEGER
+            married INTEGER,
+            picture TEXT
         )
         """,
         """
@@ -171,10 +172,11 @@ def load_users(conn: sqlite3.Connection, csv_path: Path) -> None:
                     _to_int(row.get("Gender")),
                     row.get("Age"),
                     _to_int(row.get("Married")),
+                    row.get("Picture") if "Picture" in row else "https://www.shutterstock.com/image-vector/default-avatar-profile-icon-social-600nw-1906669723.jpg",
                 )
             )
     conn.executemany(
-        "INSERT OR REPLACE INTO users (id, gender, age_range, married) VALUES (?, ?, ?, ?)",
+        "INSERT OR REPLACE INTO users (id, gender, age_range, married, picture) VALUES (?, ?, ?, ?, ?)",
         rows,
     )
 
