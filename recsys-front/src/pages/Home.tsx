@@ -6,6 +6,9 @@ import {
   getRecommendationsByItem,
   getRecommendationsWithFeedback,
   resetAllFeedback,
+  runCollaborativeFilteringDemo,
+  runCollaborativeFilteringRealDemo,
+  type DemoCFRealResponse,
 } from "../api/items";
 import UserCard from "../components/UserCard";
 import type { Topic } from "../types/Topic";
@@ -15,8 +18,11 @@ export default function Home() {
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
   const [userRecommendations, setUserRecommendations] = useState<Topic[]>([]);
   const [itemRecommendations, setItemRecommendations] = useState<Topic[]>([]);
-  const [userId, setUserId] = useState(1001);
+  const [userId, setUserId] = useState(1000);
   const [refreshKey, setRefreshKey] = useState(0); // Para forçar refresh após feedback
+  const [modelName, setModelName] = useState<"user_based_cf" | "item_based_cf" | "random" | "matrix_factorization">(
+    "user_based_cf"
+  );
 
   const mergeItemsWithScores = useMemo(
     () =>
@@ -64,7 +70,7 @@ export default function Home() {
         // O backend já filtra os dislikes, então pedimos um limite maior
         const recResponse = await getRecommendationsWithFeedback(
           userId,
-          "user_based_cf",
+          modelName,
           30
         );
         const scoredItems = recResponse.recommendations[0]?.items ?? [];
@@ -167,6 +173,34 @@ export default function Home() {
         >
           Resetar Feedbacks
         </button>
+
+        {/* Dropdown de seleção de modelo da página inicial */}
+
+        <div className="mt-6 w-full">
+          <label
+            htmlFor="model-select"
+            className="block text-sm font-medium text-white mb-1"
+          >
+            Modelo de Recomendação
+          </label>
+          <select
+            id="model-select"
+            value={modelName}
+            onChange={(e) => {
+              setModelName(
+                e.target.value as "user_based_cf" | "item_based_cf" | "random" | "matrix_factorization"
+              )
+              setRefreshKey((prev) => prev + 1);
+            }
+            }
+            className="w-full p-2 rounded-lg border border-gray-700 bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="user_based_cf">User-Based CF</option>
+            <option value="item_based_cf">Item-Based CF</option>
+            <option value="matrix_factorization">Matrix Factorization</option>
+            <option value="random">Random</option>
+          </select>
+        </div>
       </div>
 
       {/* COLUNA 2 — LISTA + DETALHES */}
@@ -204,6 +238,9 @@ export default function Home() {
                           <h2 className="text-sm font-medium text-gray-900 line-clamp-2">
                             {topic.title}
                           </h2>
+                          <p className="mt-1 text-xs text-gray-500">
+                            ID: {topic.id}
+                          </p>
                           <p className="text-xs text-gray-600 line-clamp-2">
                             {topic.description}
                           </p>

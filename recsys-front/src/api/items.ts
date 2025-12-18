@@ -162,3 +162,67 @@ export async function resetAllFeedback(): Promise<ResetFeedbackResponse> {
 
   return res.json();
 }
+
+// Demo API
+
+export interface DemoCFResponse {
+  scenario: {
+    user_1_id: number;
+    user_2_id: number;
+    user_1_likes: number[];
+    user_2_likes: number[];
+    expected_recommendation_for_user_1: number;
+  };
+  recommendations_for_user_1: Array<{ item_id: number; score: number }>;
+}
+
+export async function runCollaborativeFilteringDemo(params: {
+  user_1_id: number;
+  user_2_id: number;
+  item_x_id: number;
+  item_y_id: number;
+  item_z_id: number;
+}): Promise<DemoCFResponse> {
+  const res = await fetch(`${API_BASE_URL}/demo/cf`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to run collaborative filtering demo");
+  }
+
+  return res.json();
+}
+
+export interface DemoCFRealResponse {
+  user_1_id: number;
+  user_2_id: number;
+  item_x_id: number;
+  item_y_id: number;
+  item_z_id: number;
+  item_w_id: number;
+  z_rank: number | null;
+  recommendations: Array<{ item_id: number; score?: number }>;
+  items: {
+    x: Topic;
+    y: Topic;
+    z: Topic;
+    w: Topic;
+  };
+}
+
+export async function runCollaborativeFilteringRealDemo(): Promise<DemoCFRealResponse> {
+  const res = await fetch(`${API_BASE_URL}/demo/cf-real`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || "Failed to run real CF demo");
+  }
+
+  return res.json();
+}
