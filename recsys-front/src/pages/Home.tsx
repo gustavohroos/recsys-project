@@ -6,9 +6,6 @@ import {
   getRecommendationsByItem,
   getRecommendationsWithFeedback,
   resetAllFeedback,
-  runCollaborativeFilteringDemo,
-  runCollaborativeFilteringRealDemo,
-  type DemoCFRealResponse,
 } from "../api/items";
 import UserCard from "../components/UserCard";
 import type { Topic } from "../types/Topic";
