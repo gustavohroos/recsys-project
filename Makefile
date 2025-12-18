@@ -17,4 +17,4 @@ create-db: setup
 
 .PHONY: generate-recommendations
 generate-recommendations: setup
-	. .venv/bin/activate && python recsys/generate_recommendations.py --models random item_similarity --top-n 5 --seed 42
+	. .venv/bin/activate && python recsys/generate_recommendations.py --models random item_similarity user_based_cf item_based_cf matrix_factorization --top-n 10 --seed 42
