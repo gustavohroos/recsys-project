@@ -391,8 +391,8 @@ class ItemBasedCF:
         if denominator == 0:
             return self.ratings_matrix.item_means[item_idx] or self.ratings_matrix.global_mean
 
-            predicted = numerator / denominator
-            return float(np.clip(predicted, 1.0, 5.0))
+        predicted = numerator / denominator
+        return float(np.clip(predicted, 1.0, 5.0))
 
     def recommend_for_user(
         self,
