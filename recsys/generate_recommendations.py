@@ -138,8 +138,10 @@ def run_models(
 
     results: Dict[str, int] = {}
 
-    with sqlite3.connect(db_path) as conn:
+    with sqlite3.connect(db_path, timeout=30.0) as conn:
         conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("PRAGMA busy_timeout = 30000")
+        conn.execute("PRAGMA journal_mode = WAL")
         conn.execute(RECOMMENDATIONS_TABLE_SQL)
         for model_name in models:
             spec = MODEL_REGISTRY.get(model_name)
@@ -192,7 +194,7 @@ def _parse_args() -> argparse.Namespace:
 def main() -> None:
     args = _parse_args()
     results = run_from_args(args)
-    
+
     for model_name, count in results.items():
         print(f"Stored {count} recommendation rows for model '{model_name}'")
 
@@ -200,10 +202,10 @@ def main() -> None:
 def run_from_args(args) -> dict:
     if args.db_path is None:
         args.db_path = DEFAULT_DB_PATH
-        
+
     if args.data_dir is None:
         args.data_dir = DEFAULT_DATA_DIR
-        
+
     return run_models(
         args.models,
         top_n=args.top_n,
@@ -211,7 +213,7 @@ def run_from_args(args) -> dict:
         data_dir=args.data_dir,
         db_path=args.db_path,
     )
-    
-    
+
+
 if __name__ == "__main__":
     main()
