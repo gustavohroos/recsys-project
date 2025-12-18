@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -34,22 +33,42 @@ def _get_connection(db_path: Path = DB_PATH) -> sqlite3.Connection:
 
 
 def ensure_feedback_table(db_path: Path = DB_PATH) -> None:
-    """Ensure the user_feedback table exists."""
+    """Ensure the ratings table can store feedback rows.
+
+    Feedback is represented as rows in the ratings table with
+    `type = 'feedback'` and `rating` set to 5 (like) or 1 (dislike).
+    """
+
     conn = _get_connection(db_path)
     try:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS user_feedback (
+        # Ensure the ratings table exists and has the expected columns
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ratings (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
                 item_id INTEGER NOT NULL,
-                feedback_type TEXT NOT NULL CHECK(feedback_type IN ('like', 'dislike')),
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                rating INTEGER,
+                app INTEGER,
+                data INTEGER,
+                ease INTEGER,
+                class TEXT,
+                semester TEXT,
+                lockdown TEXT,
+                type TEXT,
                 FOREIGN KEY (user_id) REFERENCES users(id),
-                FOREIGN KEY (item_id) REFERENCES items(id),
-                UNIQUE(user_id, item_id)
+                FOREIGN KEY (item_id) REFERENCES items(id)
             )
-        """)
+            """
+        )
+
+        existing_columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(ratings)")
+        }
+        if "class" not in existing_columns:
+            conn.execute("ALTER TABLE ratings ADD COLUMN class TEXT")
+        if "type" not in existing_columns:
+            conn.execute("ALTER TABLE ratings ADD COLUMN type TEXT")
         conn.commit()
     finally:
         conn.close()
@@ -61,27 +80,20 @@ def save_feedback(
     feedback_type: Optional[str],
     db_path: Path = DB_PATH,
 ) -> Dict[str, Any]:
-    """
-    Save or update user feedback for an item.
+    """Store feedback as a rating row.
 
-    Args:
-        user_id: The user's ID
-        item_id: The item's ID
-        feedback_type: "like", "dislike", or None (to remove feedback)
-        db_path: Path to the database
-
-    Returns:
-        Dict with status and feedback info
+    Like => rating 5, Dislike => rating 1, stored with type = 'feedback'.
+    Passing ``None`` removes any feedback row for the user-item pair.
     """
+
     ensure_feedback_table(db_path)
     conn = _get_connection(db_path)
 
     try:
         if feedback_type is None:
-            # Remove feedback
             conn.execute(
-                "DELETE FROM user_feedback WHERE user_id = ? AND item_id = ?",
-                (user_id, item_id)
+                "DELETE FROM ratings WHERE user_id = ? AND item_id = ? AND type = 'feedback'",
+                (user_id, item_id),
             )
             conn.commit()
             return {
@@ -89,19 +101,27 @@ def save_feedback(
                 "user_id": user_id,
                 "item_id": item_id,
                 "feedback_type": None,
+                "rating": None,
             }
 
-        # Insert or update feedback
-        now = datetime.now().isoformat()
+        if feedback_type not in {"like", "dislike"}:
+            raise ValueError("feedback_type must be 'like' or 'dislike'")
+
+        rating_value = 5 if feedback_type == "like" else 1
+
+        # Remove existing feedback rows for this pair to keep only the latest entry
+        conn.execute(
+            "DELETE FROM ratings WHERE user_id = ? AND item_id = ? AND type = 'feedback'",
+            (user_id, item_id),
+        )
+
         conn.execute(
             """
-            INSERT INTO user_feedback (user_id, item_id, feedback_type, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(user_id, item_id) DO UPDATE SET
-                feedback_type = excluded.feedback_type,
-                updated_at = excluded.updated_at
+            INSERT INTO ratings (
+                user_id, item_id, rating, app, data, ease, class, semester, lockdown, type
+            ) VALUES (?, ?, ?, NULL, NULL, NULL, NULL, NULL, NULL, 'feedback')
             """,
-            (user_id, item_id, feedback_type, now, now)
+            (user_id, item_id, rating_value),
         )
         conn.commit()
 
@@ -110,6 +130,7 @@ def save_feedback(
             "user_id": user_id,
             "item_id": item_id,
             "feedback_type": feedback_type,
+            "rating": rating_value,
         }
     finally:
         conn.close()
@@ -130,14 +151,17 @@ def get_user_feedback(
 
     try:
         rows = conn.execute(
-            "SELECT item_id, feedback_type FROM user_feedback WHERE user_id = ?",
-            (user_id,)
+            """
+            SELECT item_id, rating
+            FROM ratings
+            WHERE user_id = ?
+            """,
+            (user_id,),
         ).fetchall()
 
-        likes = [row["item_id"] for row in rows if row["feedback_type"] == "like"]
-        dislikes = [row["item_id"] for row in rows if row["feedback_type"] == "dislike"]
+        items = [{"item_id": row["item_id"], "rating": row["rating"]} for row in rows]
 
-        return {"likes": likes, "dislikes": dislikes}
+        return {"items": items}
     finally:
         conn.close()
 
@@ -330,15 +354,17 @@ def get_all_feedback_stats(db_path: Path = DB_PATH) -> Dict[str, Any]:
     conn = _get_connection(db_path)
 
     try:
-        total = conn.execute("SELECT COUNT(*) as count FROM user_feedback").fetchone()["count"]
+        total = conn.execute(
+            "SELECT COUNT(*) as count FROM ratings WHERE type = 'feedback'"
+        ).fetchone()["count"]
         likes = conn.execute(
-            "SELECT COUNT(*) as count FROM user_feedback WHERE feedback_type = 'like'"
+            "SELECT COUNT(*) as count FROM ratings WHERE type = 'feedback' AND rating >= 3"
         ).fetchone()["count"]
         dislikes = conn.execute(
-            "SELECT COUNT(*) as count FROM user_feedback WHERE feedback_type = 'dislike'"
+            "SELECT COUNT(*) as count FROM ratings WHERE type = 'feedback' AND rating < 3"
         ).fetchone()["count"]
         users_with_feedback = conn.execute(
-            "SELECT COUNT(DISTINCT user_id) as count FROM user_feedback"
+            "SELECT COUNT(DISTINCT user_id) as count FROM ratings WHERE type = 'feedback'"
         ).fetchone()["count"]
 
         return {

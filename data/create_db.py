@@ -61,6 +61,7 @@ def create_tables(conn: sqlite3.Connection) -> None:
             class TEXT,
             semester TEXT,
             lockdown TEXT,
+            type TEXT,
             FOREIGN KEY (user_id) REFERENCES users(id),
             FOREIGN KEY (item_id) REFERENCES items(id)
         )
@@ -110,19 +111,6 @@ def create_tables(conn: sqlite3.Connection) -> None:
             items TEXT NOT NULL,
             generated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(target_key, model)
-        )
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS user_feedback (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            item_id INTEGER NOT NULL,
-            feedback_type TEXT NOT NULL CHECK(feedback_type IN ('like', 'dislike')),
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id),
-            FOREIGN KEY (item_id) REFERENCES items(id),
-            UNIQUE(user_id, item_id)
         )
         """,
     )
@@ -198,13 +186,14 @@ def load_ratings(conn: sqlite3.Connection, csv_path: Path) -> None:
                     row.get("Class"),
                     row.get("Semester"),
                     row.get("Lockdown"),
+                    "ratings",
                 )
             )
     conn.executemany(
         """
         INSERT INTO ratings (
-            user_id, item_id, rating, app, data, ease, class, semester, lockdown
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            user_id, item_id, rating, app, data, ease, class, semester, lockdown, type
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         rows,
     )

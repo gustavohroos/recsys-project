@@ -570,9 +570,9 @@ def get_recommendations_with_feedback(
 def reset_all_feedback(
     conn: sqlite3.Connection = Depends(get_connection),
 ) -> Dict[str, Any]:
-    """Reset all user feedback (likes and dislikes) for all users."""
+    """Reset all user feedback (likes and dislikes) stored in ratings."""
     try:
-        cursor = conn.execute("DELETE FROM user_feedback")
+        cursor = conn.execute("DELETE FROM ratings WHERE type = 'feedback'")
         deleted_count = cursor.rowcount
         conn.commit()
         return {
