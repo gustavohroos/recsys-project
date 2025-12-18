@@ -161,10 +161,8 @@ def get_user_feedback(
             {"item_id": row["item_id"], "rating": row["rating"]}
             for row in rows
         ]
-        likes = [row["item_id"] for row in rows if row["rating"] is not None and row["rating"] >= 4]
-        dislikes = [row["item_id"] for row in rows if row["rating"] is not None and row["rating"] <= 2]
 
-        return {"items": items, "likes": likes, "dislikes": dislikes}
+        return {"items": items}
     finally:
         conn.close()
 
