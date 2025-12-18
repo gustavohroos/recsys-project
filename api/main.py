@@ -17,8 +17,8 @@ from pydantic import BaseModel
 RECSYS_PATH = Path(__file__).resolve().parent.parent / "recsys"
 sys.path.insert(0, str(RECSYS_PATH))
 
-from preference_recommender import compute_preference_based_recommendations
-from feedback_recommender import (
+from preference_recommender import compute_preference_based_recommendations  # noqa: E402
+from feedback_recommender import (  # noqa: E402
     save_feedback,
     get_user_feedback,
     get_feedback_adjusted_recommendations,
@@ -29,7 +29,7 @@ from feedback_recommender import (
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "data.db"
 
 # Background task configuration
-RECOMMENDATION_REGENERATION_INTERVAL_SECONDS = 300  # 5 minutes
+RECOMMENDATION_REGENERATION_INTERVAL_SECONDS = 600  # 10 minutes
 _background_task_running = False
 
 
@@ -42,7 +42,7 @@ async def regenerate_recommendations_periodically():
             print("[Background] Starting recommendation regeneration...")
             # Import here to avoid circular imports
             from generate_recommendations import run_from_args
-            
+
             class Args:
                 def __init__(self):
                     self.models = [
@@ -56,7 +56,7 @@ async def regenerate_recommendations_periodically():
                     self.seed = 42
                     self.db_path = None
                     self.data_dir = None
-            
+
             run_from_args(Args())
             print("[Background] Recommendation regeneration complete.")
         except Exception as e:
@@ -348,6 +348,17 @@ def list_recommendations(
             }
         )
 
+    if target_type == "user":
+        rated_rows = conn.execute(
+            "SELECT item_id FROM ratings WHERE user_id = ? AND rating IS NOT NULL",
+            (target_id,),
+        ).fetchall()
+        rated_ids = {row["item_id"] for row in rated_rows}
+
+        for rec in recommendations:
+            filtered = [item for item in rec["items"] if item.get("item_id") not in rated_ids]
+            rec["items"] = filtered[:limit]
+
     return {
         "target_type": target_type,
         "target_id": target_id,
@@ -493,7 +504,11 @@ class FeedbackRequest(BaseModel):
 def submit_feedback(
     request: FeedbackRequest,
 ) -> Dict[str, Any]:
-    """Submit user feedback (like/dislike) for an item."""
+    """Submit user feedback (like/dislike) for an item.
+
+    Feedback is stored in the ratings table with rating 5 (like) or 1 (dislike)
+    and type = 'feedback'.
+    """
     if request.feedback not in ("like", "dislike", None):
         raise HTTPException(
             status_code=400, detail="feedback must be 'like', 'dislike', or null"
