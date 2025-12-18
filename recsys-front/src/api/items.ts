@@ -1,4 +1,10 @@
-import type { Category, PreferenceRecommendationsResponse, RecommendationsResponse } from "../types/Responses";
+import type {
+  Category,
+  PreferenceRecommendationsResponse,
+  RecommendationsResponse,
+  User,
+  UserFeedback,
+} from "../types/Responses";
 import type { Topic } from "../types/Topic";
 
 const API_BASE_URL = "http://127.0.0.1:8000/api";
@@ -7,7 +13,27 @@ const API_BASE_URL = "http://127.0.0.1:8000/api";
 const users_model_name = "user_based_cf";
 const itens_model_name = "item_based_cf";
 
-// Users 1001 - 1070
+export async function getUserFeedback(
+  userId: number | string
+): Promise<UserFeedback> {
+  const res = await fetch(`${API_BASE_URL}/feedback/${userId}`);
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch feedback for user ${userId}`);
+  }
+
+  return res.json();
+}
+
+export async function getUsers(): Promise<User[]> {
+  const res = await fetch(`${API_BASE_URL}/users`);
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch users`);
+  }
+
+  return res.json();
+}
 
 export async function getAllItems(): Promise<Topic[]> {
   const res = await fetch(`${API_BASE_URL}/items`);
@@ -42,10 +68,11 @@ export async function getItemsByIds(ids: Array<number>): Promise<Topic[]> {
 
 export async function getRecommendationsByUser(
   userId: string | number,
-  limit: number = 10
+  limit: number = 10,
+  model_name: string
 ): Promise<RecommendationsResponse> {
   const res = await fetch(
-    `${API_BASE_URL}/recommendations?user_id=${userId}&model=${users_model_name}&limit=${limit}`
+    `${API_BASE_URL}/recommendations?user_id=${userId}&model=${model_name}&limit=${limit}`
   );
 
   if (!res.ok) {
@@ -57,10 +84,11 @@ export async function getRecommendationsByUser(
 
 export async function getRecommendationsByItem(
   itemId: string | number,
-  limit: number = 10
+  limit: number = 10,
+  model_name: string
 ): Promise<RecommendationsResponse> {
   const res = await fetch(
-    `${API_BASE_URL}/recommendations?item_id=${itemId}&model=${itens_model_name}&limit=${limit}`
+    `${API_BASE_URL}/recommendations?item_id=${itemId}&model=${model_name}&limit=${limit}`
   );
 
   if (!res.ok) {
@@ -121,25 +149,9 @@ export async function getRecommendationsWithFeedback(
   );
 
   if (!res.ok) {
-    throw new Error(`Feedback-adjusted recommendations for user ${userId} not found`);
-  }
-
-  return res.json();
-}
-
-// User feedback
-
-export interface UserFeedback {
-  user_id: number;
-  likes: number[];
-  dislikes: number[];
-}
-
-export async function getUserFeedback(userId: number): Promise<UserFeedback> {
-  const res = await fetch(`${API_BASE_URL}/feedback/${userId}`);
-
-  if (!res.ok) {
-    throw new Error(`Failed to fetch feedback for user ${userId}`);
+    throw new Error(
+      `Feedback-adjusted recommendations for user ${userId} not found`
+    );
   }
 
   return res.json();

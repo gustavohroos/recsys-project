@@ -121,7 +121,9 @@ def create_tables(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "items", "image_url", "TEXT")
 
 
-def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+def _ensure_column(
+    conn: sqlite3.Connection, table: str, column: str, definition: str
+) -> None:
     existing_columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
     if column not in existing_columns:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
@@ -148,6 +150,9 @@ def load_items(conn: sqlite3.Connection, csv_path: Path) -> None:
     )
 
 
+DEFAULT_PICTURE = "https://www.shutterstock.com/image-vector/default-avatar-profile-icon-social-600nw-1906669723.jpg"
+
+
 def load_users(conn: sqlite3.Connection, csv_path: Path) -> None:
     with csv_path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
@@ -160,7 +165,7 @@ def load_users(conn: sqlite3.Connection, csv_path: Path) -> None:
                     _to_int(row.get("Gender")),
                     row.get("Age"),
                     _to_int(row.get("Married")),
-                    row.get("Picture") if "Picture" in row else "https://www.shutterstock.com/image-vector/default-avatar-profile-icon-social-600nw-1906669723.jpg",
+                    row.get("Picture") or DEFAULT_PICTURE,
                 )
             )
     conn.executemany(
@@ -307,7 +312,9 @@ def create_database(db_path: Path = DB_PATH, data_dir: Path = DATA_DIR) -> Path:
         if not items_csv.exists():
             items_csv = data_dir / "items.csv"
 
-        loaders: Iterable[Tuple[Callable[[sqlite3.Connection, Path], None], Path | str]] = (
+        loaders: Iterable[
+            Tuple[Callable[[sqlite3.Connection, Path], None], Path | str]
+        ] = (
             (load_items, items_csv),
             (load_users, "users.csv"),
             (load_ratings, "ratings.csv"),

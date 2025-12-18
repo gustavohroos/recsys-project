@@ -1,25 +1,29 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   getItemsByIds,
   getRecommendationsByItem,
-  getRecommendationsWithFeedback,
+  getRecommendationsByUser,
   resetAllFeedback,
 } from "../api/items";
+import StarRating from "../components/StarRating";
 import UserCard from "../components/UserCard";
+import UserLikedItems from "../components/UserLikedItems";
 import type { Topic } from "../types/Topic";
-import LikeDislikeButton from "../components/LikeButton";
 
 export default function Home() {
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
   const [userRecommendations, setUserRecommendations] = useState<Topic[]>([]);
   const [itemRecommendations, setItemRecommendations] = useState<Topic[]>([]);
-  const [userId, setUserId] = useState(1000);
+  const [userId, setUserId] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0); // Para forçar refresh após feedback
-  const [modelName, setModelName] = useState<"user_based_cf" | "item_based_cf" | "random" | "matrix_factorization">(
-    "user_based_cf"
-  );
+  const [modelName, setModelName] = useState<
+    "user_based_cf" | "item_based_cf" | "random" | "matrix_factorization"
+  >("user_based_cf");
+  const [itemModelName, setItemModelName] = useState<
+    "item_similarity" | "item_based_cf"
+  >("item_similarity");
 
   const mergeItemsWithScores = useMemo(
     () =>
@@ -47,15 +51,9 @@ export default function Home() {
   );
 
   // Função para recarregar recomendações após mudança de feedback
-  const handleFeedbackChange = useCallback(
-    (feedback: "like" | "dislike" | null) => {
-      // Se foi um dislike, recarregar as recomendações
-      if (feedback === "dislike") {
-        setRefreshKey((prev) => prev + 1);
-      }
-    },
-    []
-  );
+  const handleFeedbackChange = useCallback(() => {
+    setRefreshKey((prev) => prev + 1);
+  }, []);
 
   // Número de itens a exibir na lista
   const DISPLAY_LIMIT = 10;
@@ -65,10 +63,10 @@ export default function Home() {
       try {
         // Buscar mais itens do que o necessário para compensar os filtrados por feedback
         // O backend já filtra os dislikes, então pedimos um limite maior
-        const recResponse = await getRecommendationsWithFeedback(
+        const recResponse = await getRecommendationsByUser(
           userId,
-          modelName,
-          30
+          30,
+          modelName
         );
         const scoredItems = recResponse.recommendations[0]?.items ?? [];
         // Limitar para exibição
@@ -109,7 +107,11 @@ export default function Home() {
 
     (async () => {
       try {
-        const recResponse = await getRecommendationsByItem(selectedTopic.id);
+        const recResponse = await getRecommendationsByItem(
+          selectedTopic.id,
+          10,
+          itemModelName
+        );
         const scoredItems = recResponse.recommendations[0]?.items ?? [];
         const itemIds = scoredItems.map((item) => item.item_id);
 
@@ -130,13 +132,12 @@ export default function Home() {
   return (
     <div className="w-full min-h-screen bg-gray-800 flex">
       <div className="w-72 min-h-screen p-6 bg-gray-900 flex flex-col items-center">
-        <UserCard
-          name="Ulian"
-          email="ulian@ufpel.com"
-          role="X"
-          avatarUrl="https://i.pravatar.cc/150?img=65"
-          currentUserId={userId}
-          onUserChange={setUserId}
+        <UserCard currentUserId={userId} onUserChange={setUserId} />
+
+        <UserLikedItems
+          userId={userId}
+          refreshKey={refreshKey}
+          setSelectedTopic={setSelectedTopic}
         />
 
         <Link
@@ -178,6 +179,32 @@ export default function Home() {
             htmlFor="model-select"
             className="block text-sm font-medium text-white mb-1"
           >
+            Modelo de Recomendação por Item
+          </label>
+          <select
+            id="model-select"
+            value={itemModelName
+            }
+            onChange={(e) => {
+              setItemModelName(
+                e.target.value as
+                  | "item_based_cf"
+                  | "item_similarity"
+              );
+              setRefreshKey((prev) => prev + 1);
+            }}
+            className="w-full p-2 rounded-lg border border-gray-700 bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="item_similarity">Item Similarity</option>
+            <option value="item_based_cf">Item-Based CF</option>
+          </select>
+        </div>
+        
+        <div className="mt-6 w-full">
+          <label
+            htmlFor="model-select"
+            className="block text-sm font-medium text-white mb-1"
+          >
             Modelo de Recomendação
           </label>
           <select
@@ -185,16 +212,16 @@ export default function Home() {
             value={modelName}
             onChange={(e) => {
               setModelName(
-                e.target.value as "user_based_cf" | "item_based_cf" | "random" | "matrix_factorization"
-              )
+                e.target.value as
+                  | "user_based_cf"
+                  | "item_based_cf"
+                  | "random"
+              );
               setRefreshKey((prev) => prev + 1);
-            }
-            }
+            }}
             className="w-full p-2 rounded-lg border border-gray-700 bg-gray-800 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="user_based_cf">User-Based CF</option>
-            <option value="item_based_cf">Item-Based CF</option>
-            <option value="matrix_factorization">Matrix Factorization</option>
             <option value="random">Random</option>
           </select>
         </div>
@@ -297,7 +324,7 @@ export default function Home() {
                     </p>
 
                     <div className="mt-2">
-                      <LikeDislikeButton
+                      <StarRating
                         itemId={Number(selectedTopic.id)}
                         userId={userId}
                         onFeedbackChange={handleFeedbackChange}
@@ -347,10 +374,11 @@ export default function Home() {
                         className="w-10 h-10 rounded-lg object-cover"
                       />
                       <span className="text-sm">
-                        {related.title}
+                        {related.title} <br />
                         {related.score !== undefined
                           ? ` • ${related.score.toFixed(3)}`
-                          : ""}
+                          : ""}{" "}
+                        Item Similarity
                       </span>
                     </div>
                   </motion.button>

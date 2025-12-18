@@ -7,6 +7,23 @@ export interface RecommendationsResponse {
   target_type: string
 }
 
+export interface itemRating {
+  item_id: number;
+  rating: number;
+}
+
+export interface UserFeedback {
+  user_id: number;
+  items: itemRating[];
+}
+
+export interface User {
+  id: number;
+  name: string;
+  email: string;
+  picture?: string;
+}
+
 export interface Recommendations {
   generated_at: Date,
   items: Array<RecommendedItem>,
