@@ -152,7 +152,7 @@ def get_user_feedback(
             """
             SELECT item_id, rating
             FROM ratings
-            WHERE user_id = ? AND type = 'feedback'
+            WHERE user_id = ?
             """,
             (user_id,),
         ).fetchall()
